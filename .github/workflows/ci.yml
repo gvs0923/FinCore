@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        run: gradle build
+        # Ryuk works fine on Linux (GitHub-hosted runners have Docker
+        # pre-installed), so we do NOT set TESTCONTAINERS_RYUK_DISABLED
+        # here. That env var is a Colima-specific workaround in the
+        # root build.gradle and should not leak into CI.

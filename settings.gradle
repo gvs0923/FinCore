@@ -1,3 +1,4 @@
 rootProject.name = 'fincore'
 
 include 'ledger-service'
+include 'payment-service'
