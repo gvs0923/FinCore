@@ -2,3 +2,4 @@ rootProject.name = 'fincore'
 
 include 'ledger-service'
 include 'payment-service'
+include 'checkout-bff'

@@ -22,6 +22,8 @@ out/
 ## Logs
 *.log
 
-## Personal notes & Postman
-docs/ARCHITECTURE-GUIDE*.md
+## Personal notes, docs & Postman
+AGENTS.md
+docs/
 *.postman_collection.json
+*.postman.json
