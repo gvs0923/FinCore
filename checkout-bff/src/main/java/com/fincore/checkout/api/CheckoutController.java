@@ -22,32 +22,22 @@ public class CheckoutController {
         this.checkoutService = checkoutService;
     }
 
-    // Create a new checkout session
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public SessionResponse createSession(@Valid @RequestBody CreateSessionRequest request) {
         CheckoutSession session = checkoutService.createSession(
-                request.amount(),
-                request.currency(),
-                request.description()
-        );
+                request.amount(), request.currency(), request.description());
         return SessionResponse.from(session);
     }
 
-    // Submit payment for a session
     @PostMapping("/{sessionId}/pay")
     public SessionResponse pay(@PathVariable String sessionId,
                                @Valid @RequestBody PaySessionRequest request) {
         CheckoutSession session = checkoutService.pay(
-                sessionId,
-                request.cardNumber(),
-                request.cardBrand(),
-                request.cardLast4()
-        );
+                sessionId, request.cardNumber(), request.cardBrand(), request.cardLast4());
         return SessionResponse.from(session);
     }
 
-    // Poll session status
     @GetMapping("/{sessionId}")
     public SessionResponse getSession(@PathVariable String sessionId) {
         return SessionResponse.from(checkoutService.getSession(sessionId));

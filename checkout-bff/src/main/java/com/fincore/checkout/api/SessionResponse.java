@@ -4,7 +4,6 @@ import com.fincore.checkout.domain.CheckoutSession;
 
 import java.util.UUID;
 
-// What the browser gets back — clean, display-safe
 public record SessionResponse(
         String sessionId,
         long amount,
@@ -14,15 +13,15 @@ public record SessionResponse(
         UUID paymentId,
         String failureReason
 ) {
-    public static SessionResponse from(CheckoutSession s) {
+    public static SessionResponse from(CheckoutSession session) {
         return new SessionResponse(
-                s.getId(),
-                s.getAmount(),
-                s.getCurrency(),
-                s.getDescription(),
-                s.getStatus().name(),
-                s.getPaymentId(),
-                s.getFailureReason()
+                session.getId(),
+                session.getAmount(),
+                session.getCurrency(),
+                session.getDescription(),
+                session.getStatus().name(),
+                session.getPaymentId(),
+                session.getFailureReason()
         );
     }
 }

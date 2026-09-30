@@ -17,23 +17,13 @@ public class PaymentClient {
     private final RestClient restClient;
 
     public PaymentClient(@Value("${fincore.payment.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder()
-                .baseUrl(baseUrl)
-                .build();
+        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
     }
 
-    // Sends a payment request and returns the raw response as a Map.
-    // We use Map instead of a typed DTO because the BFF shouldn't
-    // mirror payment-service's internal types 
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> createPayment(String idempotencyKey,
-                                              String merchantRef,
-                                              long amount,
-                                              String currency,
-                                              String cardNumber,
-                                              String cardBrand,
+    public Map<String, Object> createPayment(String idempotencyKey, String merchantRef,
+                                              long amount, String currency,
+                                              String cardNumber, String cardBrand,
                                               String cardLast4) {
-
         Map<String, Object> body = Map.of(
                 "merchantRef", merchantRef,
                 "amount", amount,
@@ -43,7 +33,7 @@ public class PaymentClient {
                 "cardLast4", cardLast4
         );
 
-        Map<String, Object> response = restClient.post()
+        Map result = restClient.post()
                 .uri("/v1/payments")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Idempotency-Key", idempotencyKey)
@@ -51,7 +41,7 @@ public class PaymentClient {
                 .retrieve()
                 .body(Map.class);
 
-        log.info("Payment response for key {}: status={}", idempotencyKey, response.get("status"));
-        return response;
+        log.info("Payment response for key {}: status={}", idempotencyKey, result.get("status"));
+        return result;
     }
 }

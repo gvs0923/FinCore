@@ -11,14 +11,13 @@ public class CheckoutSession {
     private final String currency;
     private final String description;
     private final Instant createdAt;
-
     private CheckoutStatus status;
     private UUID paymentId;
     private String failureReason;
 
     public CheckoutSession(long amount, String currency, String description) {
         this.id = UUID.randomUUID().toString();
-        this.idempotencyKey = "checkout:" + this.id;
+        this.idempotencyKey = "checkout-" + this.id;
         this.amount = amount;
         this.currency = currency;
         this.description = description;
@@ -45,8 +44,8 @@ public class CheckoutSession {
         this.paymentId = paymentId;
     }
 
-    public void markFailed(String reason) {
+    public void markFailed(String failureReason) {
         this.status = CheckoutStatus.FAILED;
-        this.failureReason = reason;
+        this.failureReason = failureReason;
     }
 }
