@@ -13,7 +13,7 @@ import java.time.Duration;
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
 
-	@SuppressWarnings({"resource", "rawtypes"})
+	@SuppressWarnings("resource")
 	@Bean
 	@ServiceConnection
 	PostgreSQLContainer postgresContainer() {
