@@ -27,3 +27,7 @@ AGENTS.md
 docs/
 *.postman_collection.json
 *.postman.json
+
+## Node / Frontend
+node_modules/
+dist/
