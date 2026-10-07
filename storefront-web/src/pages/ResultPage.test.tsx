@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -8,6 +8,24 @@ import ResultPage from "./ResultPage";
 
 const SESSION_ID = "test-session-123";
 const PAYMENT_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+
+// jsdom does not implement EventSource. Provide a minimal mock that
+// immediately fires onerror so ResultPage falls back to polling —
+// which is exactly the behaviour these tests exercise.
+beforeEach(() => {
+  class MockEventSource {
+    onopen: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    close() {}
+    addEventListener() {}
+    constructor() {
+      // Fire onerror on next tick so the component mounts first
+      setTimeout(() => this.onerror?.(), 0);
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).EventSource = MockEventSource;
+});
 
 function renderPage() {
   const queryClient = new QueryClient({

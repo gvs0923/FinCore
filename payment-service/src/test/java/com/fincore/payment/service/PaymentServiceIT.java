@@ -1,7 +1,6 @@
 package com.fincore.payment.service;
 
 import com.fincore.payment.TestcontainersConfiguration;
-import com.fincore.payment.client.LedgerClient;
 import com.fincore.payment.domain.Payment;
 import com.fincore.payment.domain.PaymentAttempt;
 import com.fincore.payment.domain.PaymentStatus;
@@ -11,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.List;
@@ -25,15 +25,15 @@ class PaymentServiceIT {
     private PaymentService paymentService;
 
     @Autowired
-    private PaymentRepository paymentRepository;
+    private PaymentRepository paymentRepository; 
 
     @Autowired
     private PaymentAttemptRepository attemptRepository;
 
-    // Mock the LedgerClient — we don't have ledger-service running in tests.
+
     // By default Mockito mocks do nothing for void methods, which is what we want.
     @MockitoBean
-    private LedgerClient ledgerClient;
+   private KafkaTemplate<String, String> kafkaTemplate;
 
     @Test
     void successfulPayment_isCaptured() {
