@@ -28,3 +28,34 @@ jobs:
         # pre-installed), so we do NOT set TESTCONTAINERS_RYUK_DISABLED
         # here. That env var is a Colima-specific workaround in the
         # root build.gradle and should not leak into CI.
+
+  storefront:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: storefront-web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: storefront-web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
