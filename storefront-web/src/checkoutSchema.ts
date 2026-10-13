@@ -16,10 +16,13 @@ function isValidLuhn(digits: string): boolean {
 }
 
 export const checkoutFormSchema = z.object({
-  cardNumber: z
-    .string()
-    .regex(/^\d{13,19}$/, "Card number must be 13–19 digits")
-    .refine(isValidLuhn, "Card number is invalid"),
+  cardNumber: z.preprocess(
+    (v) => (typeof v === "string" ? v.replace(/\s/g, "") : v),
+    z
+      .string()
+      .regex(/^\d{13,19}$/, "Card number must be 13–19 digits")
+      .refine(isValidLuhn, "Card number is invalid"),
+  ),
   expiry: z
     .string()
     .regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "Expiry must be MM/YY"),
@@ -27,3 +30,4 @@ export const checkoutFormSchema = z.object({
 });
 
 export type CheckoutFormValues = z.infer<typeof checkoutFormSchema>;
+export type CheckoutFormInput = z.input<typeof checkoutFormSchema>;

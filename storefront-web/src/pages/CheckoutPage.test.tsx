@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { server } from "../test/mocks/server";
 import CheckoutPage from "./CheckoutPage";
@@ -13,13 +14,19 @@ function renderPage() {
     return <p>result reached</p>;
   }
 
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
   return render(
-    <MemoryRouter initialEntries={[`/checkout/${SESSION_ID}`]}>
-      <Routes>
-        <Route path="/checkout/:sessionId" element={<CheckoutPage />} />
-        <Route path="/result/:sessionId" element={<ResultSentinel />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[`/checkout/${SESSION_ID}`]}>
+        <Routes>
+          <Route path="/checkout/:sessionId" element={<CheckoutPage />} />
+          <Route path="/result/:sessionId" element={<ResultSentinel />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -37,7 +44,7 @@ describe("CheckoutPage", () => {
     expect(screen.getByLabelText("Card number")).toBeInTheDocument();
     expect(screen.getByLabelText("Expiry (MM/YY)")).toBeInTheDocument();
     expect(screen.getByLabelText("CVV")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pay" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /pay/i })).toBeEnabled();
   });
 
   it("shows test card notice", () => {
@@ -50,7 +57,7 @@ describe("CheckoutPage", () => {
     renderPage();
 
     await fillValidCard(user);
-    await user.click(screen.getByRole("button", { name: "Pay" }));
+    await user.click(screen.getByRole("button", { name: /pay/i }));
 
     expect(await screen.findByText("result reached")).toBeInTheDocument();
   });
@@ -62,7 +69,7 @@ describe("CheckoutPage", () => {
     await user.type(screen.getByLabelText("Card number"), "4242424242424241");
     await user.type(screen.getByLabelText("Expiry (MM/YY)"), "12/28");
     await user.type(screen.getByLabelText("CVV"), "123");
-    await user.click(screen.getByRole("button", { name: "Pay" }));
+    await user.click(screen.getByRole("button", { name: /pay/i }));
 
     expect(await screen.findByText("Card number is invalid")).toBeInTheDocument();
   });
@@ -74,7 +81,7 @@ describe("CheckoutPage", () => {
     await user.type(screen.getByLabelText("Card number"), "4242424242424242");
     await user.type(screen.getByLabelText("Expiry (MM/YY)"), "1328");
     await user.type(screen.getByLabelText("CVV"), "123");
-    await user.click(screen.getByRole("button", { name: "Pay" }));
+    await user.click(screen.getByRole("button", { name: /pay/i }));
 
     expect(await screen.findByText("Expiry must be MM/YY")).toBeInTheDocument();
   });
@@ -93,7 +100,7 @@ describe("CheckoutPage", () => {
     renderPage();
 
     await fillValidCard(user);
-    await user.click(screen.getByRole("button", { name: "Pay" }));
+    await user.click(screen.getByRole("button", { name: /pay/i }));
 
     expect(await screen.findByText("Insufficient funds")).toBeInTheDocument();
   });
