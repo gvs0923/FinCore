@@ -25,13 +25,18 @@ subprojects {
 
     tasks.named('test') {
         useJUnitPlatform()
-        // Testcontainers needs to know where the Docker daemon socket is.
-        // This machine uses Colima (not Docker Desktop), so point at its socket
-        // unless DOCKER_HOST is already set in the environment.
-        environment 'DOCKER_HOST', System.getenv('DOCKER_HOST') ?: "unix://${System.getProperty('user.home')}/.colima/default/docker.sock"
-        // Ryuk (Testcontainers' cleanup helper) has known issues starting under Colima's VM.
-        // Disabling it is the documented workaround; containers are still cleaned up via
-        // Testcontainers' JVM shutdown hooks instead.
-        environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
+
+        // Colima-specific workarounds — only applied when the Colima socket
+        // actually exists (i.e. local dev on macOS). On CI (GitHub Actions /
+        // standard Linux Docker) these are skipped so Testcontainers uses its
+        // defaults (unix:///var/run/docker.sock, Ryuk enabled).
+        def colimaSocket = "${System.getProperty('user.home')}/.colima/default/docker.sock"
+        if (System.getenv('DOCKER_HOST') == null && new File(colimaSocket).exists()) {
+            environment 'DOCKER_HOST', "unix://${colimaSocket}"
+            // Ryuk has known issues starting under Colima's VM; disabling it
+            // is the documented workaround. Containers are still cleaned up
+            // via Testcontainers' JVM shutdown hooks.
+            environment 'TESTCONTAINERS_RYUK_DISABLED', 'true'
+        }
     }
 }
