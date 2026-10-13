@@ -76,6 +76,47 @@ describe("ResultPage", () => {
     expect(screen.getByText(`Payment ID: ${PAYMENT_ID}`)).toBeInTheDocument();
   });
 
+  it("shows 'still processing' when SSE times out — never a false success", async () => {
+  // Mock EventSource that emits the server's "timeout" event,
+  // simulating the broker being down and events never arriving.
+  class TimeoutEventSource {
+    onerror: (() => void) | null = null;
+    close() {}
+    addEventListener(name: string, cb: (e: MessageEvent) => void) {
+      if (name === "timeout") {
+        setTimeout(() => cb({ data: '{"message":"Still processing"}' } as MessageEvent), 0);
+      }
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).EventSource = TimeoutEventSource;
+
+  renderPage();
+
+  expect(await screen.findByText("Still processing")).toBeInTheDocument();
+  expect(screen.queryByText("Payment succeeded")).not.toBeInTheDocument();
+});
+
+it("falls back to polling when SSE errors, and polls to a truthful result", async () => {
+  // Default MockEventSource already fires onerror → component polls
+  server.use(
+    http.get("/v1/checkout/sessions/:id", () =>
+      HttpResponse.json({
+        sessionId: SESSION_ID,
+        amount: 5000,
+        currency: "USD",
+        status: "PROCESSING",   // broker still dead — honest answer
+      }),
+    ),
+  );
+
+  renderPage();
+
+  // Polling with PROCESSING shows the spinner — not success, not failure
+  expect(await screen.findByText("Processing your payment…")).toBeInTheDocument();
+  expect(screen.queryByText("Payment succeeded")).not.toBeInTheDocument();
+});
+
   it("shows failure state with reason", async () => {
     server.use(
       http.get("/v1/checkout/sessions/:id", () => {
