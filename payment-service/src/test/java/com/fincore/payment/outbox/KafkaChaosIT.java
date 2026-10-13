@@ -35,10 +35,19 @@ class KafkaChaosIT {
 
     // JAVA_TOOL_OPTIONS: the JDK in the image crashes with SIGILL under
     // Colima's vz VM (SVE probing on ARM) — -XX:UseSVE=0 works around it.
+    // The flag is harmless on x64 but only strictly needed on aarch64.
     @Container
-    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.8.1")
-            .withEnv("JAVA_TOOL_OPTIONS", "-XX:UseSVE=0")
-            .withStartupTimeout(Duration.ofSeconds(180));
+    static KafkaContainer kafka = newKafkaContainer();
+
+    @SuppressWarnings("resource")
+    private static KafkaContainer newKafkaContainer() {
+        KafkaContainer c = new KafkaContainer("apache/kafka:3.8.1")
+                .withStartupTimeout(Duration.ofSeconds(180));
+        if ("aarch64".equals(System.getProperty("os.arch"))) {
+            c.withEnv("JAVA_TOOL_OPTIONS", "-XX:UseSVE=0");
+        }
+        return c;
+    }
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
