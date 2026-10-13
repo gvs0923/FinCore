@@ -1,82 +1,47 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { http, HttpResponse } from "msw";
-import { server } from "../test/mocks/server";
+import { MemoryRouter } from "react-router-dom";
+import { CartProvider } from "../cart/CartProvider";
+import { useCart } from "../cart/cart";
 import CataloguePage from "./CataloguePage";
 
-/** Renders CataloguePage inside a router so useNavigate works. */
-function renderPage() {
-  // A sentinel component so we can assert navigation happened.
-  function CheckoutSentinel() {
-    return <p>checkout reached</p>;
-  }
+function CartCount() {
+  const { count } = useCart();
+  return <span data-testid="cart-count">{count}</span>;
+}
 
+function renderPage() {
+  localStorage.removeItem("fincore-cart");
   return render(
     <MemoryRouter initialEntries={["/"]}>
-      <Routes>
-        <Route path="/" element={<CataloguePage />} />
-        <Route path="/checkout/:sessionId" element={<CheckoutSentinel />} />
-      </Routes>
+      <CartProvider>
+        <CartCount />
+        <CataloguePage />
+      </CartProvider>
     </MemoryRouter>,
   );
 }
 
 describe("CataloguePage", () => {
-  it("renders the product name, price, and Buy button", () => {
+  it("renders the product grid with names and prices", () => {
     renderPage();
 
-    expect(screen.getByText("Premium Widget")).toBeInTheDocument();
-    expect(screen.getByText("$50.00")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Buy" })).toBeEnabled();
-  });
-
-  it("navigates to /checkout/:sessionId after clicking Buy", async () => {
-    const user = userEvent.setup();
-    renderPage();
-
-    await user.click(screen.getByRole("button", { name: "Buy" }));
-
-    // The MSW handler returns sessionId "test-session-123"
-    expect(await screen.findByText("checkout reached")).toBeInTheDocument();
-  });
-
-  it("shows loading state while session is being created", async () => {
-    // Make the handler hang so we can observe the loading state
-    server.use(
-      http.post("/v1/checkout/sessions", () => {
-        return new Promise(() => {}); // never resolves
-      }),
-    );
-
-    const user = userEvent.setup();
-    renderPage();
-
-    await user.click(screen.getByRole("button", { name: "Buy" }));
-
+    expect(screen.getByText("Enterprise Processing")).toBeInTheDocument();
+    expect(screen.getByText("$499.00")).toBeInTheDocument();
     expect(
-      await screen.findByRole("button", { name: "Creating session…" }),
-    ).toBeDisabled();
+      screen.getAllByRole("button", { name: "Add to cart" }).length,
+    ).toBeGreaterThan(1);
   });
 
-  it("shows an error message when the API call fails", async () => {
-    server.use(
-      http.post("/v1/checkout/sessions", () => {
-        return HttpResponse.json(
-          { detail: "Service unavailable" },
-          { status: 503 },
-        );
-      }),
-    );
-
+  it("adds a product to the cart", async () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(screen.getByRole("button", { name: "Buy" }));
+    await user.click(
+      screen.getAllByRole("button", { name: "Add to cart" })[0],
+    );
 
-    expect(await screen.findByText("Service unavailable")).toBeInTheDocument();
-    // Button should be re-enabled after error
-    expect(screen.getByRole("button", { name: "Buy" })).toBeEnabled();
+    expect(screen.getByTestId("cart-count")).toHaveTextContent("1");
   });
 });
