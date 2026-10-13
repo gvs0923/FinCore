@@ -1,7 +1,41 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getSession, type SessionResponse } from "../api/client";
+import { formatMoney } from "../lib/money";
+
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <main
+      className="mx-auto flex max-w-md flex-col items-center px-6 py-20 text-center"
+      aria-live="polite"
+    >
+      {children}
+    </main>
+  );
+}
+
+function StatusIcon({ variant }: { variant: "success" | "failure" | "pending" }) {
+  if (variant === "pending") {
+    return (
+      <div className="h-16 w-16 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600 dark:border-slate-700 dark:border-t-indigo-400" />
+    );
+  }
+  const isSuccess = variant === "success";
+  return (
+    <svg
+      viewBox="0 0 52 52"
+      className={`result-icon h-16 w-16 ${isSuccess ? "text-emerald-500" : "text-red-500"}`}
+    >
+      <circle cx="26" cy="26" r="24" fill="none" stroke="currentColor" strokeWidth="2.5" className="stroke" />
+      {isSuccess ? (
+        <path fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" d="M14 27l8 8 16-17" className="stroke" />
+      ) : (
+        <path fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" d="M17 17l18 18M35 17L17 35" className="stroke" />
+      )}
+    </svg>
+  );
+}
 
 export default function ResultPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -12,9 +46,7 @@ export default function ResultPage() {
   // Attempt SSE first
   useEffect(() => {
     if (!sessionId) return;
-    const eventSource = new EventSource(
-      `/v1/checkout/sessions/${sessionId}/events`
-    );
+    const eventSource = new EventSource(`/v1/checkout/sessions/${sessionId}/events`);
 
     eventSource.addEventListener("status", (e) => {
       const data: SessionResponse = JSON.parse(e.data);
@@ -31,13 +63,13 @@ export default function ResultPage() {
 
     eventSource.onerror = () => {
       eventSource.close();
-      setSseActive(false);   // fall back to polling
+      setSseActive(false);
     };
 
     return () => eventSource.close();
   }, [sessionId]);
 
-  // Polling fallback — only runs when SSE is not active and no result yet
+  // Polling fallback
   const { data: polledData, error } = useQuery({
     queryKey: ["session", sessionId],
     queryFn: () => getSession(sessionId!),
@@ -52,49 +84,106 @@ export default function ResultPage() {
 
   if (error) {
     return (
-      <main className="p-8" aria-live="polite">
-        <p>Could not load session.</p>
-      </main>
+      <Shell>
+        <StatusIcon variant="failure" />
+        <p className="mt-6 text-slate-500">Could not load session.</p>
+      </Shell>
     );
   }
 
   if (timedOut) {
     return (
-      <main className="p-8" aria-live="polite">
-        <h1 className="text-xl font-bold text-yellow-700">
+      <Shell>
+        <StatusIcon variant="pending" />
+        <h1 className="mt-6 text-xl font-bold text-amber-600 dark:text-amber-400">
           Still processing
         </h1>
-        <p>
-          Your payment is taking longer than expected. We'll email you
-          when it completes.
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          Your payment is taking longer than expected. We&apos;ll notify you when it completes.
         </p>
-      </main>
+        <Link
+          to="/"
+          className="mt-8 rounded-lg border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+        >
+          Back to dashboard
+        </Link>
+      </Shell>
     );
   }
 
   if (!data || data.status === "PROCESSING" || data.status === "OPEN") {
     return (
-      <main className="p-8" aria-live="polite">
-        <p>Processing your payment…</p>
-      </main>
+      <Shell>
+        <StatusIcon variant="pending" />
+        <p className="mt-6 text-slate-500 dark:text-slate-400">
+          Processing your payment&hellip;
+        </p>
+      </Shell>
     );
   }
 
   if (data.status === "SUCCEEDED") {
     return (
-      <main className="p-8" aria-live="polite">
-        <h1 className="text-xl font-bold text-green-700">
+      <Shell>
+        <StatusIcon variant="success" />
+        <h1 className="mt-6 text-2xl font-bold text-slate-900 dark:text-white">
           Payment succeeded
         </h1>
-        <p>Payment ID: {data.paymentId}</p>
-      </main>
+        <div className="mt-6 w-full space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 text-left text-sm dark:border-slate-800 dark:bg-slate-900">
+          {data.description && (
+            <div className="flex justify-between gap-4">
+              <span className="text-slate-500 dark:text-slate-400">Order</span>
+              <span className="text-right text-slate-900 dark:text-white">{data.description}</span>
+            </div>
+          )}
+          {data.amount != null && data.currency && (
+            <div className="flex justify-between gap-4">
+              <span className="text-slate-500 dark:text-slate-400">Amount</span>
+              <span className="font-semibold text-slate-900 dark:text-white">
+                {formatMoney(data.amount, data.currency)}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-between gap-4 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400">Payment ID</span>
+            <span className="font-mono text-xs text-slate-600 dark:text-slate-300">
+              Payment ID: {data.paymentId}
+            </span>
+          </div>
+        </div>
+        <Link
+          to="/"
+          className="mt-8 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
+        >
+          Back to dashboard
+        </Link>
+      </Shell>
     );
   }
 
   return (
-    <main className="p-8" aria-live="polite">
-      <h1 className="text-xl font-bold text-red-700">Payment failed</h1>
-      <p>{data.failureReason ?? "Unknown reason"}</p>
-    </main>
+    <Shell>
+      <StatusIcon variant="failure" />
+      <h1 className="mt-6 text-2xl font-bold text-slate-900 dark:text-white">
+        Payment failed
+      </h1>
+      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        {data.failureReason ?? "Unknown reason"}
+      </p>
+      <div className="mt-8 flex gap-3">
+        <Link
+          to={`/checkout/${sessionId}`}
+          className="rounded-lg bg-indigo-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+        >
+          Try again
+        </Link>
+        <Link
+          to="/"
+          className="rounded-lg border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+        >
+          Back to dashboard
+        </Link>
+      </div>
+    </Shell>
   );
 }
