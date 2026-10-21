@@ -32,9 +32,19 @@ class MetricsRollupIT {
             .withStartupTimeout(Duration.ofSeconds(120));
 
     @Container
-    static KafkaContainer kafka = new KafkaContainer("apache/kafka:3.8.1")
-            .withEnv("JAVA_TOOL_OPTIONS", "-XX:UseSVE=0")
-            .withStartupTimeout(Duration.ofSeconds(180));
+    static KafkaContainer kafka = newKafkaContainer();
+
+    @SuppressWarnings("resource")
+    private static KafkaContainer newKafkaContainer() {
+        KafkaContainer c = new KafkaContainer("apache/kafka:3.8.1")
+                .withStartupTimeout(Duration.ofSeconds(180));
+        // -XX:UseSVE=0 is only needed on aarch64 (Apple Silicon);
+        // setting it unconditionally crashes the JVM on x86 CI runners.
+        if ("aarch64".equals(System.getProperty("os.arch"))) {
+            c.withEnv("JAVA_TOOL_OPTIONS", "-XX:UseSVE=0");
+        }
+        return c;
+    }
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
