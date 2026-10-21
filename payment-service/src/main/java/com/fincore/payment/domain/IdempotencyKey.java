@@ -49,6 +49,11 @@ public class IdempotencyKey {
         this.responseBody = responseBody;
     }
 
+    public void unlinkPayment() {
+        this.paymentId = null;
+        this.responseBody = null;
+    }
+
     public String getKeyValue() { return keyValue; }
     public UUID getPaymentId() { return paymentId; }
     public String getResponseBody() { return responseBody; }
