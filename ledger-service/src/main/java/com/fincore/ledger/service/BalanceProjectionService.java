@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
+import java.util.ArrayList;
 
 /**
  * Rebuilds the account_balances projection from the source-of-truth
@@ -77,6 +78,51 @@ public class BalanceProjectionService {
 
         return recomputed;
     }
+
+    /**
+ * Read-only drift check: replays entries and compares with the stored
+ * balance, but does NOT overwrite. Returns a result per account.
+ */
+@Transactional(readOnly = true)
+public List<IntegrityResult> checkIntegrity() {
+    List<Account> accounts = accountRepository.findAll();
+    List<IntegrityResult> results = new ArrayList<>();
+    for (Account account : accounts) {
+        AccountBalance balance = balanceRepository.findById(account.getId())
+                .orElse(null);
+        if (balance == null) {
+            results.add(new IntegrityResult(
+                    account.getId(), account.getAccountRef(),
+                    BigDecimal.ZERO, null, true));
+            continue;
+        }
+
+        List<LedgerEntry> entries =
+                entryRepository.findByAccountIdOrderByCreatedAtAsc(account.getId());
+        BigDecimal recomputed = BigDecimal.ZERO;
+        for (LedgerEntry entry : entries) {
+            boolean increases =
+                    normalBalanceSide(account.getAccountType()) == entry.getEntryType();
+            recomputed = increases
+                    ? recomputed.add(entry.getAmount())
+                    : recomputed.subtract(entry.getAmount());
+        }
+
+        boolean drifted = balance.getBalance().compareTo(recomputed) != 0;
+        results.add(new IntegrityResult(
+                account.getId(), account.getAccountRef(),
+                recomputed, balance.getBalance(), drifted));
+    }
+    return results;
+}
+
+public record IntegrityResult(
+        UUID accountId,
+        String accountRef,
+        BigDecimal recomputed,
+        BigDecimal stored,
+        boolean drifted
+) {}
 
     /**
      * Rebuilds balances for ALL accounts. Use with care — this is an

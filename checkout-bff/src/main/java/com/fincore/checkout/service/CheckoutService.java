@@ -42,6 +42,11 @@ public class CheckoutService {
             return session;
         }
 
+        // Reset failure state so the session can be retried
+        if (session.getStatus() == CheckoutStatus.FAILED) {
+            session.clearFailure();
+        }
+
         session.markProcessing();
 
         try {
@@ -94,6 +99,16 @@ public class CheckoutService {
         CheckoutSession session = sessions.get(sessionId);
         if (session == null) {
             log.debug("No active session for merchantRef {}", merchantRef);
+            return;
+        }
+
+        // Only update if the session is still waiting for a result.
+        // Ignore stale events from a previous attempt if the session
+        // has already been retried (PROCESSING) or already reached a
+        // terminal state via the synchronous pay response.
+        if (session.getStatus() != CheckoutStatus.PROCESSING) {
+            log.debug("Ignoring Kafka event for session {} in state {}",
+                    sessionId, session.getStatus());
             return;
         }
 
