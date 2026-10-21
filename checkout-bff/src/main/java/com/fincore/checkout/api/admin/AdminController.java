@@ -1,5 +1,6 @@
 package com.fincore.checkout.api.admin;
 
+import com.fincore.checkout.client.LedgerAdminClient;
 import com.fincore.checkout.client.MetricsClient;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -26,9 +27,11 @@ public class AdminController {
     private static final Duration MAX_RANGE = Duration.ofDays(31);
 
     private final MetricsClient metricsClient;
+    private final LedgerAdminClient ledgerClient;
 
-    public AdminController(MetricsClient metricsClient) {
+    public AdminController(MetricsClient metricsClient, LedgerAdminClient ledgerClient) {
         this.metricsClient = metricsClient;
+        this.ledgerClient = ledgerClient;
     }
 
     @GetMapping("/overview")
@@ -38,6 +41,11 @@ public class AdminController {
         return Map.of(
                 "window", Map.of("from", from.toString(), "to", to.toString()),
                 "payments", metricsClient.paymentSummary(from, to));
+    }
+
+    @GetMapping("/integrity/balances")
+    public Map<String, Object> ledgerIntegrity() {
+        return ledgerClient.checkIntegrity();
     }
 
     @GetMapping("/metrics/timeseries")

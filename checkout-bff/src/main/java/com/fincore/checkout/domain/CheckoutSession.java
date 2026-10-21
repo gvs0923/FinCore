@@ -48,4 +48,9 @@ public class CheckoutSession {
         this.status = CheckoutStatus.FAILED;
         this.failureReason = failureReason;
     }
+
+    public void clearFailure() {
+        this.status = CheckoutStatus.OPEN;
+        this.failureReason = null;
+    }
 }

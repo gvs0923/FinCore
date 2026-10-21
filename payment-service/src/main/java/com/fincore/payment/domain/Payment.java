@@ -79,6 +79,19 @@ public class Payment {
         this.updatedAt = OffsetDateTime.now();
     }
 
+    public void resetForRetry(String cardBrand, String cardLast4) {
+        if (!this.status.isTerminalFailure()) {
+            throw new IllegalStateException(
+                    "Can only retry a payment in a terminal failure state, not " + this.status);
+        }
+        this.status = PaymentStatus.CREATED;
+        this.declineReason = null;
+        this.ledgerRef = null;
+        this.cardBrand = cardBrand;
+        this.cardLast4 = cardLast4;
+        this.updatedAt = OffsetDateTime.now();
+    }
+
     public void markDeclined(String reason) {
         transitionTo(PaymentStatus.DECLINED);
         this.declineReason = reason;

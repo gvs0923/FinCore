@@ -1,10 +1,13 @@
 package com.fincore.checkout.api.admin;
 
+import com.fincore.checkout.client.LedgerAdminClient;
 import com.fincore.checkout.client.MetricsClient;
+import com.fincore.checkout.config.TestKafkaConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -20,11 +23,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = "fincore.admin.token=test-token")
 @AutoConfigureMockMvc
+@Import(TestKafkaConfig.class)
 class AdminControllerIT {
 
     @Autowired private MockMvc mockMvc;
 
     @MockitoBean private MetricsClient metricsClient;
+    @MockitoBean private LedgerAdminClient ledgerAdminClient;
 
     private static final String AUTH = "X-Admin-Token";
 

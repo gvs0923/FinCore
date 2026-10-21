@@ -1,11 +1,12 @@
 package com.fincore.checkout;
 
+import com.fincore.checkout.config.TestKafkaConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.context.annotation.Import;
 
 @SpringBootTest
-@TestPropertySource(properties = "spring.kafka.listener.auto-startup=false")
+@Import(TestKafkaConfig.class)
 class CheckoutBffApplicationTests {
 
     @Test

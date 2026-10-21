@@ -44,4 +44,8 @@ public enum PaymentStatus {
     public boolean isTerminal() {
         return TRANSITIONS.getOrDefault(this, Set.of()).isEmpty();
     }
+
+    public boolean isTerminalFailure() {
+        return this == DECLINED || this == CAPTURE_FAILED || this == FAILED;
+    }
 }

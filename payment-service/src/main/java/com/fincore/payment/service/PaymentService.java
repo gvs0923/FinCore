@@ -51,20 +51,28 @@ public class PaymentService {
         IdempotencyKey iKey = idempotencyKeyRepository.findById(idempotencyKey)
                 .orElseGet(() -> idempotencyKeyRepository.save(
                         new IdempotencyKey(idempotencyKey)));
- 
+
+        Payment payment;
         if (iKey.hasPayment()) {
-            log.info("Idempotency hit for key {}, returning existing payment {}",
-                    idempotencyKey, iKey.getPaymentId());
-            return paymentRepository.findById(iKey.getPaymentId()).orElseThrow();
+            Payment existing = paymentRepository.findById(iKey.getPaymentId()).orElseThrow();
+            if (!existing.getStatus().isTerminalFailure()) {
+                log.info("Idempotency hit for key {}, returning existing payment {}",
+                        idempotencyKey, iKey.getPaymentId());
+                return existing;
+            }
+            // Previous attempt failed — reset and retry with the same payment row
+            log.info("Idempotency key {} linked to failed payment {} ({}), retrying",
+                    idempotencyKey, iKey.getPaymentId(), existing.getStatus());
+            existing.resetForRetry(cardBrand, cardLast4);
+            payment = paymentRepository.save(existing);
+        } else {
+            // --- Step 2: Create payment ---
+            payment = paymentRepository.save(
+                    new Payment(idempotencyKey, merchantRef, amount, currency,
+                            cardBrand, cardLast4));
+            iKey.linkPayment(payment.getId(), null);
+            idempotencyKeyRepository.save(iKey);
         }
-
-        // --- Step 2: Create payment ---
-        Payment payment = paymentRepository.save(
-                new Payment(idempotencyKey, merchantRef, amount, currency,
-                        cardBrand, cardLast4));
-
-        iKey.linkPayment(payment.getId(), null);
-        idempotencyKeyRepository.save(iKey);
 
         publishEvent(payment, "payment.created");
 

@@ -1,5 +1,6 @@
 package com.fincore.checkout.api.admin;
 
+import com.fincore.checkout.metrics.RequestMetricsInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -8,9 +9,12 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class AdminWebConfig implements WebMvcConfigurer {
 
     private final AdminAuthInterceptor adminAuth;
+    private final RequestMetricsInterceptor requestMetrics;
 
-    public AdminWebConfig(AdminAuthInterceptor adminAuth) {
+    public AdminWebConfig(AdminAuthInterceptor adminAuth,
+                          RequestMetricsInterceptor requestMetrics) {
         this.adminAuth = adminAuth;
+        this.requestMetrics = requestMetrics;
     }
 
     @Override
@@ -19,5 +23,6 @@ public class AdminWebConfig implements WebMvcConfigurer {
         // endpoint under /v1/admin/** is automatically covered. A public
         // route that skips this prefix is a bug reviewers can grep for.
         registry.addInterceptor(adminAuth).addPathPatterns("/v1/admin/**");
+        registry.addInterceptor(requestMetrics).addPathPatterns("/v1/**");
     }
 }

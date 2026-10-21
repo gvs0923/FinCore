@@ -9,12 +9,18 @@ import com.fincore.ledger.repository.AccountBalanceRepository;
 import com.fincore.ledger.repository.AccountRepository;
 import com.fincore.ledger.repository.LedgerEntryRepository;
 import com.fincore.ledger.repository.LedgerTransactionRepository;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.ObjectMapper;
+
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The ledger is FinCore's source of financial truth. Every financial
@@ -28,15 +34,21 @@ public class LedgerService {
     private final LedgerTransactionRepository transactionRepository;
     private final LedgerEntryRepository entryRepository;
     private final AccountBalanceRepository balanceRepository;
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper objectMapper;
 
     public LedgerService(AccountRepository accountRepository,
                           LedgerTransactionRepository transactionRepository,
                           LedgerEntryRepository entryRepository,
-                          AccountBalanceRepository balanceRepository) {
+                          AccountBalanceRepository balanceRepository,
+                          JdbcTemplate jdbc,
+                          ObjectMapper objectMapper) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.entryRepository = entryRepository;
         this.balanceRepository = balanceRepository;
+        this.jdbc = jdbc;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -68,11 +80,14 @@ public class LedgerService {
                 .sorted(Comparator.comparing(JournalLine::accountRef))
                 .toList();
 
+        List<LedgerEntry> savedEntries = new ArrayList<>();
         for (JournalLine line : orderedLines) {
             Account account = accountRepository.findByAccountRef(line.accountRef())
                     .orElseThrow(() -> new AccountNotFoundException(line.accountRef()));
 
-            entryRepository.save(new LedgerEntry(transaction, account, line.entryType(), line.amount(), account.getCurrency()));
+            LedgerEntry entry = entryRepository.save(
+                    new LedgerEntry(transaction, account, line.entryType(), line.amount(), account.getCurrency()));
+            savedEntries.add(entry);
 
             // ADR-001: balance row MUST exist — it was created when the account
             // was created. If it's missing, that's a data integrity violation,
@@ -84,6 +99,14 @@ public class LedgerService {
             balance.apply(line.entryType(), line.amount(), account.getAccountType());
             balanceRepository.save(balance);
         }
+
+        // After saving all entries and updating balances, write to outbox
+        jdbc.update("""
+                INSERT INTO ledger_outbox_events (aggregate_type, aggregate_id, event_type, payload)
+                VALUES ('transaction', ?, 'ledger.transaction.posted', ?::jsonb)
+                """,
+                transaction.getId().toString(),
+                buildTransactionPayload(transaction, savedEntries));
 
         return transaction;
     }
@@ -104,5 +127,37 @@ public class LedgerService {
                 .filter(line -> line.entryType() == type)
                 .map(JournalLine::amount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private String buildTransactionPayload(LedgerTransaction transaction, List<LedgerEntry> entries) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("transactionId", transaction.getId().toString());
+        payload.put("reference", transaction.getReference());
+        payload.put("description", transaction.getDescription());
+
+        BigDecimal totalDebits = entries.stream()
+                .filter(e -> e.getEntryType() == EntryType.DEBIT)
+                .map(LedgerEntry::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalCredits = entries.stream()
+                .filter(e -> e.getEntryType() == EntryType.CREDIT)
+                .map(LedgerEntry::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        payload.put("entryCount", entries.size());
+        payload.put("totalDebits", totalDebits);
+        payload.put("totalCredits", totalCredits);
+
+        List<Map<String, Object>> entryList = entries.stream().map(e -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("entryId", e.getId().toString());
+            m.put("accountRef", e.getAccount().getAccountRef());
+            m.put("entryType", e.getEntryType().name());
+            m.put("amount", e.getAmount().toPlainString());
+            m.put("currency", e.getCurrency());
+            return m;
+        }).toList();
+        payload.put("entries", entryList);
+
+        return objectMapper.writeValueAsString(payload);
     }
 }
