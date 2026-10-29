@@ -34,7 +34,10 @@ public class PaymentMetricsConsumer {
     }
 
  
-    @KafkaListener(topicPattern = "payment\\..*",
+    // [a-z_]+ excludes "-": a looser "payment\\..*" also matched our own
+    // dead-letter topics (payment.captured-dlt), so a failing message was
+    // re-consumed from the DLT and dead-lettered again (-dlt-dlt-dlt…).
+    @KafkaListener(topicPattern = "payment\\.[a-z_]+",
                    groupId = "metrics-projection")
     @Transactional
     public void onPaymentEvent(String message,

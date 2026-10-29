@@ -50,6 +50,60 @@ public class MetricsClient {
                         .body(new ParameterizedTypeReference<>() {}));
     }
 
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> status() {
+        return (Map<String, Object>) cached("status", () ->
+                restClient.get()
+                        .uri("/metrics/status")
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {}));
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> requestSummary(Instant from, Instant to) {
+        return (Map<String, Object>) cached("reqsum:" + from + ":" + to, () ->
+                restClient.get()
+                        .uri("/metrics/requests/summary?from={f}&to={t}", from, to)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {}));
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> requestTimeseries(Instant from, Instant to) {
+        return (List<Map<String, Object>>) cached("reqts:" + from + ":" + to, () ->
+                restClient.get()
+                        .uri("/metrics/requests/timeseries?from={f}&to={t}", from, to)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {}));
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> ledgerSummary(Instant from, Instant to) {
+        return (Map<String, Object>) cached("ledgersum:" + from + ":" + to, () ->
+                restClient.get()
+                        .uri("/metrics/ledger/summary?from={f}&to={t}", from, to)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {}));
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> ledgerTimeseries(Instant from, Instant to) {
+        return (List<Map<String, Object>>) cached("ledgerts:" + from + ":" + to, () ->
+                restClient.get()
+                        .uri("/metrics/ledger/timeseries?from={f}&to={t}", from, to)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {}));
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> lag() {
+        return (Map<String, Object>) cached("lag", () ->
+                restClient.get()
+                        .uri("/metrics/lag")
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {}));
+    }
+
     private Object cached(String key, java.util.function.Supplier<Object> fetch) {
         CacheEntry hit = cache.get(key);
         if (hit != null && hit.fresh()) return hit.body;

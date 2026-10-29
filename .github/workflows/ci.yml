@@ -59,3 +59,18 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Phase 3.5 boundary rule: admin code may import shared shopper
+      # modules, but NOTHING outside src/admin may import admin code —
+      # that is what keeps an XSS in the storefront from being an
+      # admin-shaped XSS. Guard it at source level so the mistake can
+      # never reach a bundle.
+      - name: Bundle boundary check
+        run: |
+          violations=$(grep -rnE "from ['\"][^'\"]*admin/" src \
+              --include='*.ts' --include='*.tsx' | grep -v '^src/admin/' || true)
+          if [ -n "$violations" ]; then
+            echo "::error::Shopper code imports admin code:"
+            echo "$violations"
+            exit 1
+          fi

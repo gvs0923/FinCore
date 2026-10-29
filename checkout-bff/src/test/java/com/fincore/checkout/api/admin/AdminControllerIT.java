@@ -70,6 +70,22 @@ class AdminControllerIT {
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * Every /v1/admin/** route must reject unauthenticated requests —
+     * one matcher guards them all, so prove it on each endpoint.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "/v1/admin/overview",
+            "/v1/admin/metrics/timeseries?metric=payment_count"
+                    + "&from=2025-01-01T00:00:00Z&to=2025-01-02T00:00:00Z",
+            "/v1/admin/integrity/balances"
+    })
+    void everyGetRoute_withoutToken_returns401(String uri) throws Exception {
+        mockMvc.perform(get(uri))
+                .andExpect(status().isUnauthorized());
+    }
+
     @Test
     void timeseries_rangeTooLarge_returns400() throws Exception {
         Instant to = Instant.now();
