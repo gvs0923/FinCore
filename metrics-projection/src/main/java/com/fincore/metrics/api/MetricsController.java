@@ -23,9 +23,15 @@ public class MetricsController {
     private static final Duration MAX_RANGE = Duration.ofDays(31);
 
     private final MetricsQueryService queries;
+    private final com.fincore.metrics.rollup.RebuildService rebuildService;
+    private final com.fincore.metrics.consumer.LagService lagService;
 
-    public MetricsController(MetricsQueryService queries) {
+    public MetricsController(MetricsQueryService queries,
+                             com.fincore.metrics.rollup.RebuildService rebuildService,
+                             com.fincore.metrics.consumer.LagService lagService) {
         this.queries = queries;
+        this.rebuildService = rebuildService;
+        this.lagService = lagService;
     }
 
     @GetMapping("/payments/summary")
@@ -56,5 +62,81 @@ public class MetricsController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Invalid range: from must be before to and span <= 31 days");
         }
+    }
+
+    // ---------------- Request traffic ----------------
+
+    @GetMapping("/requests/timeseries")
+    public List<Map<String, Object>> requestTimeseries(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant to) {
+        checkRange(from, to);
+        return queries.requestTimeseries(from, to);
+    }
+
+    @GetMapping("/requests/summary")
+    public Map<String, Object> requestSummary(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant to) {
+        checkRange(from, to);
+        long[] buckets = queries.requestLatencyBuckets(from, to);
+        return Map.of(
+                "byRoute", queries.requestsByRoute(from, to),
+                "errorRate", queries.errorRate(from, to),
+                "p50ms", HistogramQuantiles.quantile(0.50, buckets),
+                "p95ms", HistogramQuantiles.quantile(0.95, buckets),
+                "p99ms", HistogramQuantiles.quantile(0.99, buckets));
+    }
+
+    // ---------------- Ledger activity ----------------
+
+    @GetMapping("/ledger/summary")
+    public Map<String, Object> ledgerSummary(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant to) {
+        checkRange(from, to);
+        return queries.ledgerSummary(from, to);
+    }
+
+    @GetMapping("/ledger/timeseries")
+    public List<Map<String, Object>> ledgerTimeseries(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant to) {
+        checkRange(from, to);
+        return queries.ledgerTimeseries(from, to);
+    }
+
+    /** Kafka consumer lag — dashboard health signal. */
+    @GetMapping("/lag")
+    public Map<String, Object> lag() {
+        return lagService.lag();
+    }
+
+    @GetMapping("/status")
+    public Map<String, Object> status() {
+        Instant last = queries.lastProcessedAt();
+        return Map.of(
+                "lastProcessedAt", last == null ? "" : last.toString(),
+                "stale", last == null
+                        || Duration.between(last, Instant.now()).toMinutes() > 5);
+    }
+
+    /**
+     * Destructive operational endpoint: truncates every rollup and replays
+     * the Kafka event log from the beginning. Only reachable internally —
+     * the BFF exposes it exclusively under /v1/admin/**.
+     */
+    @org.springframework.web.bind.annotation.PostMapping("/rebuild")
+    public Map<String, Object> rebuild() throws Exception {
+        rebuildService.rebuildAll();
+        return Map.of("rebuild", "started");
     }
 }
