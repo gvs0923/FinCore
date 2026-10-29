@@ -23,7 +23,8 @@ public class AdminController {
     // One validated metric allowlist — never pass a user-supplied metric
     // name anywhere near SQL or a table name.
     private static final Set<String> ALLOWED_METRICS =
-            Set.of("payment_count", "payment_volume");
+            Set.of("payment_count", "payment_volume",
+                    "request_count", "ledger_transactions");
     private static final Duration MAX_RANGE = Duration.ofDays(31);
 
     private final MetricsClient metricsClient;
@@ -40,7 +41,12 @@ public class AdminController {
         Instant from = to.minus(Duration.ofHours(24));
         return Map.of(
                 "window", Map.of("from", from.toString(), "to", to.toString()),
-                "payments", metricsClient.paymentSummary(from, to));
+                "payments", metricsClient.paymentSummary(from, to),
+                "traffic", metricsClient.requestSummary(from, to),
+                "ledger", metricsClient.ledgerSummary(from, to),
+                "health", Map.of(
+                        "status", metricsClient.status(),
+                        "lag", metricsClient.lag()));
     }
 
     @GetMapping("/integrity/balances")
@@ -70,6 +76,10 @@ public class AdminController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Invalid range: must be <= 31 days");
         }
-        return metricsClient.paymentTimeseries(from, to);
+        return switch (metric) {
+            case "request_count" -> metricsClient.requestTimeseries(from, to);
+            case "ledger_transactions" -> metricsClient.ledgerTimeseries(from, to);
+            default -> metricsClient.paymentTimeseries(from, to);
+        };
     }
 }

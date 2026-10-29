@@ -1,5 +1,12 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, NavLink } from "react-router-dom";
 import { useTheme } from "../../theme/theme";
+
+const NAV_ITEMS = [
+  { to: "/", label: "Overview", end: true },
+  { to: "/traffic", label: "Traffic" },
+  { to: "/payments", label: "Payments" },
+  { to: "/ledger", label: "Ledger" },
+];
 
 export default function AdminLayout() {
   const { theme, toggle } = useTheme();
@@ -45,6 +52,27 @@ export default function AdminLayout() {
           </button>
         </div>
       </header>
+
+      <nav className="border-b border-slate-200/60 bg-white/60 dark:border-slate-800 dark:bg-slate-950/60">
+        <div className="mx-auto flex max-w-7xl gap-1 px-6">
+          {NAV_ITEMS.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `border-b-2 px-3 py-2.5 text-sm font-medium transition ${
+                  isActive
+                    ? "border-indigo-500 text-indigo-600 dark:text-indigo-400"
+                    : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
 
       <main className="flex-1">
         <Outlet />
