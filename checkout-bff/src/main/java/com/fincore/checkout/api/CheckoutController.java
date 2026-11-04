@@ -54,7 +54,8 @@ public SseEmitter sessionEvents(@PathVariable String sessionId) {
 
     // If already terminal, send immediately and complete
     if (session.getStatus() == CheckoutStatus.SUCCEEDED
-            || session.getStatus() == CheckoutStatus.FAILED) {
+        || session.getStatus() == CheckoutStatus.REVIEW
+        || session.getStatus() == CheckoutStatus.FAILED) {
         try {
             emitter.send(SseEmitter.event()
                     .name("status")

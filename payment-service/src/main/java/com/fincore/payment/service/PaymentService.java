@@ -2,6 +2,7 @@ package com.fincore.payment.service;
 
 import com.fincore.payment.client.PaymentProcessor;
 import com.fincore.payment.client.ProcessorResult;
+import com.fincore.payment.client.RiskClient;
 import com.fincore.payment.domain.IdempotencyKey;
 import com.fincore.payment.domain.OutboxEvent;
 import com.fincore.payment.domain.Payment;
@@ -16,6 +17,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.HexFormat;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -28,17 +33,20 @@ public class PaymentService {
     private final IdempotencyKeyRepository idempotencyKeyRepository;
     private final OutboxEventRepository outboxEventRepository;
     private final PaymentProcessor paymentProcessor;
+    private final RiskClient riskClient;
 
     public PaymentService(PaymentRepository paymentRepository,
                           PaymentAttemptRepository attemptRepository,
                           IdempotencyKeyRepository idempotencyKeyRepository,
                           OutboxEventRepository outboxEventRepository,
-                          PaymentProcessor paymentProcessor) {
+                          PaymentProcessor paymentProcessor,
+                        RiskClient riskClient) {
         this.paymentRepository = paymentRepository;
         this.attemptRepository = attemptRepository;
         this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.paymentProcessor = paymentProcessor;
+        this.riskClient = riskClient;
     }
 
     @Transactional
@@ -97,6 +105,28 @@ public class PaymentService {
         paymentRepository.save(payment);
         publishEvent(payment, "payment.authorized");
 
+        // --- Step 3.5: Risk check (synchronous — blocks capture) ---
+        String cardFingerprint = fingerprint(cardNumber);
+        Map<String, Object> risk = riskClient.assess(
+                payment.getId().toString(), amount, currency,
+                cardFingerprint, "unknown-device", "unknown-ip");
+
+        String riskDecision = riskDecision(risk, amount);
+        if ("BLOCK".equals(riskDecision)) {
+            payment.markDeclined("RISK_BLOCK");
+            paymentRepository.save(payment);
+            publishEvent(payment, "payment.declined");
+            log.info("Payment {} blocked by risk engine", payment.getId());
+            return payment;
+        }
+        if ("REVIEW".equals(riskDecision)) {
+            payment.transitionTo(PaymentStatus.REVIEW);
+            paymentRepository.save(payment);
+            publishEvent(payment, "payment.review");
+            log.info("Payment {} parked for manual review", payment.getId());
+            return payment;
+        }
+
         // --- Step 4: Capture ---
         ProcessorResult capResult = paymentProcessor.capture(
                 authResult.processorRef());
@@ -141,5 +171,28 @@ public class PaymentService {
                         p.getCardBrand(), p.getCardLast4());
         outboxEventRepository.save(
                 new OutboxEvent("Payment", p.getId(), eventType, payload));
+    }
+
+    /**
+     * Fail-closed for large amounts, fail-open for small ones: when the
+     * risk service is down, a cheap local rule stands in. An outage must
+     * never silently bypass risk on a big payment — nor stop all sales.
+     */
+    private String riskDecision(Map<String, Object> risk, long amount) {
+        if (risk == null) {
+            return amount > 500_000 ? "REVIEW" : "ALLOW";
+        }
+        return (String) risk.get("decision");
+    }
+
+    /** SHA-256 fingerprint of the PAN — identity for velocity rules, never the card itself. */
+    private String fingerprint(String cardNumber) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256")
+                    .digest(cardNumber.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash).substring(0, 16);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

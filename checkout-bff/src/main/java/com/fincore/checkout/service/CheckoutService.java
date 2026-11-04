@@ -72,6 +72,9 @@ public class CheckoutService {
                 String reason = (String) result.getOrDefault(
                         "declineReason", status);
                 session.markFailed(reason);
+            } else if ("REVIEW".equals(status)) {
+                String id = (String) result.get("id");
+                session.markReview(UUID.fromString(id));
             }
             // Any other status (AUTHORIZED, CREATED) stays PROCESSING —
             // the Kafka consumer will update when a terminal event arrives
@@ -115,6 +118,17 @@ public class CheckoutService {
         if ("CAPTURED".equals(status)) {
             session.markSucceeded(UUID.fromString(paymentId));
             log.info("Session {} succeeded via Kafka event", sessionId);
+        } else if ("DECLINED".equals(status) || "CAPTURE_FAILED".equals(status)
+                   || "FAILED".equals(status)) {
+            session.markFailed(reason != null ? reason : status);
+            log.info("Session {} failed via Kafka event: {}",
+                    sessionId, reason);
+        }         if ("CAPTURED".equals(status)) {
+            session.markSucceeded(UUID.fromString(paymentId));
+            log.info("Session {} succeeded via Kafka event", sessionId);
+        } else if ("REVIEW".equals(status)) {
+            session.markReview(UUID.fromString(paymentId));
+            log.info("Session {} under review via Kafka event", sessionId);
         } else if ("DECLINED".equals(status) || "CAPTURE_FAILED".equals(status)
                    || "FAILED".equals(status)) {
             session.markFailed(reason != null ? reason : status);
