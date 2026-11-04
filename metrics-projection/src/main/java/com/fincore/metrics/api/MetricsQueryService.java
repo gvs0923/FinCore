@@ -17,15 +17,28 @@ public class MetricsQueryService {
         this.jdbc = jdbc;
     }
 
-    /** Hourly rollup rows in [from, to) — raw material for timeseries charts. */
+    /**
+     * Rollup rows in [from, to) — raw material for timeseries charts.
+     * Unions hourly rows with daily rows: retention moves a day from
+     * hourly to daily, so the two never overlap; old ranges simply come
+     * back at day granularity.
+     */
     public List<Map<String, Object>> paymentTimeseries(Instant from, Instant to) {
         return jdbc.queryForList("""
                 SELECT window_start, status, currency, decline_reason,
                        payment_count, volume_minor_units
                 FROM payment_metrics_hourly
                 WHERE window_start >= ? AND window_start < ?
+                UNION ALL
+                SELECT day::timestamp AT TIME ZONE 'UTC',
+                       status, currency, decline_reason,
+                       payment_count, volume_minor_units
+                FROM payment_metrics_daily
+                WHERE day::timestamp AT TIME ZONE 'UTC' >= ?
+                  AND day::timestamp AT TIME ZONE 'UTC' < ?
                 ORDER BY window_start, status
-                """, Timestamp.from(from), Timestamp.from(to));
+                """, Timestamp.from(from), Timestamp.from(to),
+                Timestamp.from(from), Timestamp.from(to));
     }
 
     /** Headline aggregates in [from, to) — one row per status. */
@@ -63,15 +76,26 @@ public class MetricsQueryService {
 
     // ---------------- Request traffic ----------------
 
-    /** Hits per hour split by status class — raw material for traffic charts. */
+    /** Hits per bucket split by status class — traffic charts (see note above). */
     public List<Map<String, Object>> requestTimeseries(Instant from, Instant to) {
         return jdbc.queryForList("""
-                SELECT window_start, status_class, SUM(hit_count) AS hit_count
-                FROM request_metrics_hourly
-                WHERE window_start >= ? AND window_start < ?
-                GROUP BY window_start, status_class
+                SELECT window_start, status_class, hit_count FROM (
+                    SELECT window_start, status_class,
+                           SUM(hit_count) AS hit_count
+                    FROM request_metrics_hourly
+                    WHERE window_start >= ? AND window_start < ?
+                    GROUP BY window_start, status_class
+                    UNION ALL
+                    SELECT day::timestamp AT TIME ZONE 'UTC', status_class,
+                           SUM(hit_count) AS hit_count
+                    FROM request_metrics_daily
+                    WHERE day::timestamp AT TIME ZONE 'UTC' >= ?
+                      AND day::timestamp AT TIME ZONE 'UTC' < ?
+                    GROUP BY day, status_class
+                ) t
                 ORDER BY window_start
-                """, Timestamp.from(from), Timestamp.from(to));
+                """, Timestamp.from(from), Timestamp.from(to),
+                Timestamp.from(from), Timestamp.from(to));
     }
 
     /** Hit counts grouped by route in [from, to). */
@@ -140,14 +164,22 @@ public class MetricsQueryService {
                 """, Timestamp.from(from), Timestamp.from(to));
     }
 
-    /** Hourly ledger activity — for the transactions-posted chart. */
+    /** Ledger activity per bucket — transactions-posted chart (see note above). */
     public List<Map<String, Object>> ledgerTimeseries(Instant from, Instant to) {
         return jdbc.queryForList("""
                 SELECT window_start, transaction_count, entry_count,
                        total_debits, total_credits
                 FROM ledger_metrics_hourly
                 WHERE window_start >= ? AND window_start < ?
+                UNION ALL
+                SELECT day::timestamp AT TIME ZONE 'UTC',
+                       transaction_count, entry_count,
+                       total_debits, total_credits
+                FROM ledger_metrics_daily
+                WHERE day::timestamp AT TIME ZONE 'UTC' >= ?
+                  AND day::timestamp AT TIME ZONE 'UTC' < ?
                 ORDER BY window_start
-                """, Timestamp.from(from), Timestamp.from(to));
+                """, Timestamp.from(from), Timestamp.from(to),
+                Timestamp.from(from), Timestamp.from(to));
     }
 }
