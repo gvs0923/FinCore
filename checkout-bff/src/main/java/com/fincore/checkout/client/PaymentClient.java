@@ -8,6 +8,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @Component
@@ -24,15 +25,17 @@ public class PaymentClient {
     public Map<String, Object> createPayment(String idempotencyKey, String merchantRef,
                                               long amount, String currency,
                                               String cardNumber, String cardBrand,
-                                              String cardLast4) {
-        Map<String, Object> body = Map.of(
-                "merchantRef", merchantRef,
-                "amount", amount,
-                "currency", currency,
-                "cardNumber", cardNumber,
-                "cardBrand", cardBrand,
-                "cardLast4", cardLast4
-        );
+                                              String cardLast4, String deviceId,
+                                              String ipAddress) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("merchantRef", merchantRef);
+        body.put("amount", amount);
+        body.put("currency", currency);
+        body.put("cardNumber", cardNumber);
+        body.put("cardBrand", cardBrand);
+        body.put("cardLast4", cardLast4);
+        body.put("deviceFingerprint", deviceId);
+        body.put("ipAddress", ipAddress);
 
         Map<String, Object> result = restClient.post()
                 .uri("/v1/payments")

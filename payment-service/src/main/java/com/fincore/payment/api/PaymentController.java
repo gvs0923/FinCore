@@ -39,7 +39,9 @@ public class PaymentController {
                 request.currency(),
                 request.cardNumber(),
                 request.cardBrand(),
-                request.cardLast4()
+                request.cardLast4(),
+                request.deviceFingerprint() != null ? request.deviceFingerprint() : "unknown-device",
+                request.ipAddress() != null ? request.ipAddress() : "unknown-ip"
         );
 
         return PaymentResponse.from(payment);

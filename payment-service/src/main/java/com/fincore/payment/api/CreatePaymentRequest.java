@@ -11,5 +11,7 @@ public record CreatePaymentRequest(
         @NotBlank @Size(min = 3, max = 3) String currency,
         @NotBlank String cardNumber,           // test PAN only (4242...)
         @NotBlank String cardBrand,            // VISA, MASTERCARD etc.
-        @NotBlank @Size(min = 4, max = 4) String cardLast4
+        @NotBlank @Size(min = 4, max = 4) String cardLast4,
+        String deviceFingerprint,
+        String ipAddress
 ) {}

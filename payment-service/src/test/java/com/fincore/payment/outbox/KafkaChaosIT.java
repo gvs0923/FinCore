@@ -70,7 +70,7 @@ class KafkaChaosIT {
         // 1. Happy path: payment while broker is UP → events get published
         Payment p1 = paymentService.processPayment(
                 "chaos-" + System.nanoTime(), "ORDER-CHAOS-1",
-                5000L, "USD", "4242424242424242", "VISA", "4242");
+                5000L, "USD", "4242424242424242", "VISA", "4242", "unknown-device", "unknown-ip");
         awaitPublished(p1, Duration.ofSeconds(15));
 
         // 2. Freeze the broker (pause, not stop — stop/start would remap the
@@ -81,7 +81,7 @@ class KafkaChaosIT {
                 .pauseContainerCmd(kafka.getContainerId()).exec();
         Payment p2 = paymentService.processPayment(
                 "chaos-" + System.nanoTime(), "ORDER-CHAOS-2",
-                7000L, "USD", "4242424242424242", "VISA", "4242");
+                7000L, "USD", "4242424242424242", "VISA", "4242", "unknown-device", "unknown-ip");
 
         // Give the publisher a few poll cycles to fail — events must STAY unpublished
         Thread.sleep(4000);

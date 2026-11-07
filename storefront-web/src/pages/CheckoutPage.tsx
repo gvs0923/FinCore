@@ -3,6 +3,7 @@ import { useNavigate, useParams, Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
+import { getDeviceId } from "../lib/device";
 import {
   checkoutFormSchema,
   type CheckoutFormInput,
@@ -58,7 +59,10 @@ export default function CheckoutPage() {
     setSubmitError(null);
     try {
       const cardLast4 = values.cardNumber.slice(-4);
-      await paySession(sessionId, values.cardNumber, brand, cardLast4);
+      await paySession(sessionId, values.cardNumber, brand, cardLast4, {
+        deviceId: getDeviceId(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
       navigate(`/result/${sessionId}`);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Payment failed");
