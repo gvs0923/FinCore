@@ -182,4 +182,30 @@ public class MetricsQueryService {
                 """, Timestamp.from(from), Timestamp.from(to),
                 Timestamp.from(from), Timestamp.from(to));
     }
+
+    // ---------------- Risk decisions ----------------
+
+    /** Risk decision counts in [from, to) — one row per decision. */
+    public List<Map<String, Object>> riskByDecision(Instant from, Instant to) {
+        return jdbc.queryForList("""
+                SELECT decision, SUM(decision_count) AS count
+                FROM risk_metrics_hourly
+                WHERE window_start >= ? AND window_start < ?
+                GROUP BY decision
+                """, Timestamp.from(from), Timestamp.from(to));
+    }
+
+    /** Top fired risk rules in [from, to) — '' means "no rule fired". */
+    public List<Map<String, Object>> riskTopRules(Instant from, Instant to,
+                                                  int limit) {
+        return jdbc.queryForList("""
+                SELECT rule_fired, SUM(decision_count) AS count
+                FROM risk_metrics_hourly
+                WHERE window_start >= ? AND window_start < ?
+                  AND rule_fired <> ''
+                GROUP BY rule_fired
+                ORDER BY count DESC
+                LIMIT ?
+                """, Timestamp.from(from), Timestamp.from(to), limit);
+    }
 }

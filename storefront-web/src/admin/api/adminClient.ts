@@ -8,8 +8,9 @@ export function setAdminToken(token: string) {
   localStorage.setItem(ADMIN_TOKEN_KEY, token);
 }
 
-async function adminRequest<T>(path: string): Promise<T> {
+async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
+    ...init,
     headers: {
       "Content-Type": "application/json",
       "X-Admin-Token": getAdminToken(),
@@ -20,7 +21,7 @@ async function adminRequest<T>(path: string): Promise<T> {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.message ?? `Admin request failed: ${res.status}`);
+    throw new Error(body?.message ?? body?.detail ?? `Admin request failed: ${res.status}`);
   }
   return res.json();
 }
@@ -152,4 +153,22 @@ export interface LedgerTimeseriesRow {
   entry_count: number;
   total_debits: number;
   total_credits: number;
+}
+
+export interface ReviewItem {
+  payment_id: string;
+  score: number;
+  fired_rules: string;
+  created_at: string;
+}
+
+export function fetchReviewQueue() {
+  return adminRequest<ReviewItem[]>("/v1/admin/risk/queue");
+}
+
+export function resolveReview(paymentId: string, action: "approve" | "reject") {
+  return adminRequest<unknown>(
+    `/v1/admin/risk/${encodeURIComponent(paymentId)}/resolve?action=${action}`,
+    { method: "POST" },
+  );
 }

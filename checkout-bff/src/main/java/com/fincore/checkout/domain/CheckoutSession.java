@@ -53,4 +53,9 @@ public class CheckoutSession {
         this.status = CheckoutStatus.OPEN;
         this.failureReason = null;
     }
+
+    public void markReview(UUID paymentId) {
+        this.status = CheckoutStatus.REVIEW;
+        this.paymentId = paymentId;
+    }
 }

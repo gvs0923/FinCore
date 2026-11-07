@@ -3,6 +3,7 @@ package com.fincore.checkout.api;
 import com.fincore.checkout.domain.CheckoutSession;
 import com.fincore.checkout.domain.CheckoutStatus;
 import com.fincore.checkout.service.CheckoutService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -35,9 +36,13 @@ public class CheckoutController {
 
     @PostMapping("/{sessionId}/pay")
     public SessionResponse pay(@PathVariable String sessionId,
-                               @Valid @RequestBody PaySessionRequest request) {
+                               @Valid @RequestBody PaySessionRequest request,
+                               HttpServletRequest http) {
         CheckoutSession session = checkoutService.pay(
-                sessionId, request.cardNumber(), request.cardBrand(), request.cardLast4());
+                sessionId, request.cardNumber(), request.cardBrand(),
+                request.cardLast4(),
+                request.deviceId() != null ? request.deviceId() : "unknown",
+                http.getRemoteAddr());
         return SessionResponse.from(session);
     }
 
@@ -54,7 +59,8 @@ public SseEmitter sessionEvents(@PathVariable String sessionId) {
 
     // If already terminal, send immediately and complete
     if (session.getStatus() == CheckoutStatus.SUCCEEDED
-            || session.getStatus() == CheckoutStatus.FAILED) {
+        || session.getStatus() == CheckoutStatus.REVIEW
+        || session.getStatus() == CheckoutStatus.FAILED) {
         try {
             emitter.send(SseEmitter.event()
                     .name("status")

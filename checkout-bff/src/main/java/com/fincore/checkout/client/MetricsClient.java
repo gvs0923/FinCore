@@ -111,4 +111,13 @@ public class MetricsClient {
         cache.put(key, new CacheEntry(body, System.currentTimeMillis()));
         return body;
     }
+
+  @SuppressWarnings("unchecked")
+    public Map<String, Object> riskSummary(Instant from, Instant to) {
+        return (Map<String, Object>) cached("risk:" + from + ":" + to, () ->
+                restClient.get()
+                        .uri("/metrics/risk/summary?from={f}&to={t}", from, to)
+                        .retrieve()
+                        .body(new ParameterizedTypeReference<>() {}));
+    }
 }

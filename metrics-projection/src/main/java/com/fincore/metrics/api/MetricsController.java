@@ -139,4 +139,17 @@ public class MetricsController {
         rebuildService.rebuildAll();
         return Map.of("rebuild", "started");
     }
+
+    @GetMapping("/risk/summary")
+    public Map<String, Object> riskSummary(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            Instant to) {
+        checkRange(from, to);
+        return Map.of(
+                "byDecision", queries.riskByDecision(from, to),
+                "topRules", queries.riskTopRules(from, to, 5));
+    }
+
 }

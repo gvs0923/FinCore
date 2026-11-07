@@ -59,7 +59,7 @@ class CheckoutControllerIT {
     void paySession_successfulCard_returnsSucceeded() throws Exception {
         UUID paymentId = UUID.randomUUID();
         when(paymentClient.createPayment(anyString(), anyString(), anyLong(),
-                anyString(), anyString(), anyString(), anyString()))
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(Map.of("id", paymentId.toString(), "status", "CAPTURED", "amount", 5000));
 
         String createResponse = mockMvc.perform(post("/v1/checkout/sessions")
@@ -88,7 +88,7 @@ class CheckoutControllerIT {
     @Test
     void paySession_declinedCard_returnsFailed() throws Exception {
         when(paymentClient.createPayment(anyString(), anyString(), anyLong(),
-                anyString(), anyString(), anyString(), anyString()))
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(Map.of("id", UUID.randomUUID().toString(), "status", "DECLINED", "declineReason", "generic_decline"));
 
         String createResponse = mockMvc.perform(post("/v1/checkout/sessions")
@@ -116,7 +116,7 @@ class CheckoutControllerIT {
     @Test
     void paySession_paymentServiceDown_returnsFailed() throws Exception {
         when(paymentClient.createPayment(anyString(), anyString(), anyLong(),
-                anyString(), anyString(), anyString(), anyString()))
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenThrow(new RuntimeException("Connection refused"));
 
         String createResponse = mockMvc.perform(post("/v1/checkout/sessions")
@@ -145,7 +145,7 @@ class CheckoutControllerIT {
     void getSession_afterPayment_returnsCurrentStatus() throws Exception {
         UUID paymentId = UUID.randomUUID();
         when(paymentClient.createPayment(anyString(), anyString(), anyLong(),
-                anyString(), anyString(), anyString(), anyString()))
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(Map.of("id", paymentId.toString(), "status", "CAPTURED"));
 
         String createResponse = mockMvc.perform(post("/v1/checkout/sessions")
@@ -168,7 +168,7 @@ class CheckoutControllerIT {
     void paySession_alreadySucceeded_returnsSameResult() throws Exception {
         UUID paymentId = UUID.randomUUID();
         when(paymentClient.createPayment(anyString(), anyString(), anyLong(),
-                anyString(), anyString(), anyString(), anyString()))
+                anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(Map.of("id", paymentId.toString(), "status", "CAPTURED"));
 
         String createResponse = mockMvc.perform(post("/v1/checkout/sessions")

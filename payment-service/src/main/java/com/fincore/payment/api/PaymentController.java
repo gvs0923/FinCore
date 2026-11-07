@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -39,7 +40,9 @@ public class PaymentController {
                 request.currency(),
                 request.cardNumber(),
                 request.cardBrand(),
-                request.cardLast4()
+                request.cardLast4(),
+                request.deviceFingerprint() != null ? request.deviceFingerprint() : "unknown-device",
+                request.ipAddress() != null ? request.ipAddress() : "unknown-ip"
         );
 
         return PaymentResponse.from(payment);
@@ -50,4 +53,25 @@ public class PaymentController {
     public PaymentResponse getPayment(@PathVariable UUID paymentId) {
         return PaymentResponse.from(paymentService.getPayment(paymentId));
     }
+
+        /**
+     * Internal: analyst resolves a REVIEW payment. Like /metrics/rebuild,
+     * this is not part of the shopper contract — only the admin BFF calls it.
+     * TODO Phase 7: restrict to an internal role.
+     */
+    @PostMapping("/{paymentId}/resolve")
+    public PaymentResponse resolve(@PathVariable UUID paymentId,
+                                   @RequestParam String action) {
+        // No default and no "anything but reject" — a typo must never capture money.
+        boolean approve = switch (action) {
+            case "approve" -> true;
+            case "reject" -> false;
+            default -> throw new IllegalArgumentException(
+                    "action must be 'approve' or 'reject'");
+        };
+        return PaymentResponse.from(
+                paymentService.resolveReviewedPayment(paymentId, approve));
+    }
+
+
 }

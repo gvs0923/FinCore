@@ -41,7 +41,7 @@ class PaymentServiceIT {
                 "idem-" + System.nanoTime(),
                 "ORDER-001",
                 5000L, "USD",
-                "4242424242424242", "VISA", "4242"
+                "4242424242424242", "VISA", "4242", "unknown-device", "unknown-ip"
         );
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CAPTURED);
@@ -68,7 +68,7 @@ class PaymentServiceIT {
                 "idem-" + System.nanoTime(),
                 "ORDER-002",
                 3000L, "USD",
-                "4000000000000002", "VISA", "0002"
+                "4000000000000002", "VISA", "0002", "unknown-device", "unknown-ip"
         );
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.DECLINED);
@@ -88,7 +88,7 @@ class PaymentServiceIT {
                 "idem-" + System.nanoTime(),
                 "ORDER-003",
                 2000L, "USD",
-                "1111111111111111", "UNKNOWN", "1111"
+                "1111111111111111", "UNKNOWN", "1111", "unknown-device", "unknown-ip"
         );
 
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.DECLINED);
@@ -101,12 +101,12 @@ class PaymentServiceIT {
 
         Payment first = paymentService.processPayment(
                 key, "ORDER-004", 7500L, "USD",
-                "4242424242424242", "VISA", "4242"
+                "4242424242424242", "VISA", "4242", "unknown-device", "unknown-ip"
         );
 
         Payment second = paymentService.processPayment(
                 key, "ORDER-004", 7500L, "USD",
-                "4242424242424242", "VISA", "4242"
+                "4242424242424242", "VISA", "4242", "unknown-device", "unknown-ip"
         );
 
         // Same payment returned — no double charge
@@ -121,7 +121,7 @@ class PaymentServiceIT {
         Payment created = paymentService.processPayment(
                 "idem-" + System.nanoTime(),
                 "ORDER-005", 1000L, "USD",
-                "4242424242424242", "VISA", "4242"
+                "4242424242424242", "VISA", "4242", "unknown-device", "unknown-ip"
         );
 
         Payment fetched = paymentService.getPayment(created.getId());

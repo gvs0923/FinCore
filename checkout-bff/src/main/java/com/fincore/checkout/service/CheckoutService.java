@@ -35,7 +35,8 @@ public class CheckoutService {
     }
 
     public CheckoutSession pay(String sessionId, String cardNumber,
-                                String cardBrand, String cardLast4) {
+                           String cardBrand, String cardLast4,
+                           String deviceId, String ipAddress) {
         CheckoutSession session = getSession(sessionId);
 
         if (session.getStatus() == CheckoutStatus.SUCCEEDED) {
@@ -60,7 +61,7 @@ public class CheckoutService {
                     "checkout-" + sessionId,
                     session.getAmount(),
                     session.getCurrency(),
-                    cardNumber, cardBrand, cardLast4
+                    cardNumber, cardBrand, cardLast4, deviceId, ipAddress
             );
 
             String status = (String) result.get("status");
@@ -72,6 +73,9 @@ public class CheckoutService {
                 String reason = (String) result.getOrDefault(
                         "declineReason", status);
                 session.markFailed(reason);
+            } else if ("REVIEW".equals(status)) {
+                String id = (String) result.get("id");
+                session.markReview(UUID.fromString(id));
             }
             // Any other status (AUTHORIZED, CREATED) stays PROCESSING —
             // the Kafka consumer will update when a terminal event arrives
@@ -115,6 +119,17 @@ public class CheckoutService {
         if ("CAPTURED".equals(status)) {
             session.markSucceeded(UUID.fromString(paymentId));
             log.info("Session {} succeeded via Kafka event", sessionId);
+        } else if ("DECLINED".equals(status) || "CAPTURE_FAILED".equals(status)
+                   || "FAILED".equals(status)) {
+            session.markFailed(reason != null ? reason : status);
+            log.info("Session {} failed via Kafka event: {}",
+                    sessionId, reason);
+        }         if ("CAPTURED".equals(status)) {
+            session.markSucceeded(UUID.fromString(paymentId));
+            log.info("Session {} succeeded via Kafka event", sessionId);
+        } else if ("REVIEW".equals(status)) {
+            session.markReview(UUID.fromString(paymentId));
+            log.info("Session {} under review via Kafka event", sessionId);
         } else if ("DECLINED".equals(status) || "CAPTURE_FAILED".equals(status)
                    || "FAILED".equals(status)) {
             session.markFailed(reason != null ? reason : status);
