@@ -40,7 +40,8 @@ class OutboxEventIT {
                 .map(OutboxEvent::getEventType).toList();
 
         assertThat(types).containsExactly(
-                "payment.created", "payment.authorized", "payment.captured");
+                "payment.created", "payment.authorized", "risk.assessed",
+                "payment.captured");
     }
 
     @Test

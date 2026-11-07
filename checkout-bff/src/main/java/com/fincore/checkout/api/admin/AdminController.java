@@ -2,12 +2,17 @@ package com.fincore.checkout.api.admin;
 
 import com.fincore.checkout.client.LedgerAdminClient;
 import com.fincore.checkout.client.MetricsClient;
+import com.fincore.checkout.client.PaymentClient;
+import com.fincore.checkout.client.RiskAdminClient;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
@@ -15,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/admin")
@@ -29,10 +35,17 @@ public class AdminController {
 
     private final MetricsClient metricsClient;
     private final LedgerAdminClient ledgerClient;
+    private final RiskAdminClient riskAdminClient;
+    private final PaymentClient paymentClient;
 
-    public AdminController(MetricsClient metricsClient, LedgerAdminClient ledgerClient) {
+    public AdminController(MetricsClient metricsClient,
+                           LedgerAdminClient ledgerClient,
+                           RiskAdminClient riskAdminClient,
+                           PaymentClient paymentClient) {
         this.metricsClient = metricsClient;
         this.ledgerClient = ledgerClient;
+        this.riskAdminClient = riskAdminClient;
+        this.paymentClient = paymentClient;
     }
 
     @GetMapping("/overview")
@@ -44,6 +57,7 @@ public class AdminController {
                 "payments", metricsClient.paymentSummary(from, to),
                 "traffic", metricsClient.requestSummary(from, to),
                 "ledger", metricsClient.ledgerSummary(from, to),
+                "risk", metricsClient.riskSummary(from, to),
                 "health", Map.of(
                         "status", metricsClient.status(),
                         "lag", metricsClient.lag()));
@@ -81,5 +95,38 @@ public class AdminController {
             case "ledger_transactions" -> metricsClient.ledgerTimeseries(from, to);
             default -> metricsClient.paymentTimeseries(from, to);
         };
+    }
+
+    @GetMapping("/risk/queue")
+    public List<Map<String, Object>> riskQueue() {
+        return riskAdminClient.reviewQueue();
+    }
+
+    @PostMapping("/risk/{paymentId}/resolve")
+    public Map<String, Object> resolveRisk(@PathVariable UUID paymentId,
+                                           @RequestParam String action) {
+        if (!"approve".equals(action) && !"reject".equals(action)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "action must be 'approve' or 'reject'");
+        }
+        String id = paymentId.toString();
+        try {
+            Map<String, Object> payment = paymentClient.resolvePayment(id, action);
+            riskAdminClient.markResolved(id, action);
+            return payment;
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found");
+        } catch (HttpClientErrorException.Conflict e) {
+            // Already out of REVIEW (another analyst, or an earlier attempt
+            // whose queue update failed): record what actually happened so
+            // the stale entry drains, then report the conflict.
+            Object status = paymentClient.getPayment(id).get("status");
+            if (!"REVIEW".equals(status)) {
+                riskAdminClient.markResolved(id,
+                        "CAPTURED".equals(status) ? "approve" : "reject");
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Payment is no longer under review (now " + status + ")");
+        }
     }
 }

@@ -97,7 +97,8 @@ class KafkaChaosIT {
                 .filter(e -> e.getAggregateId().equals(p2.getId()))
                 .map(OutboxEvent::getEventType).sorted().toList();
         assertThat(types).isEqualTo(
-                List.of("payment.authorized", "payment.captured", "payment.created"));
+                List.of("payment.authorized", "payment.captured", "payment.created",
+                        "risk.assessed"));
     }
 
     private List<OutboxEvent> unpublishedFor(Payment p) {

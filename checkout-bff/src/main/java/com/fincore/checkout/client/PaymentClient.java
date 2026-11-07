@@ -48,4 +48,18 @@ public class PaymentClient {
         log.info("Payment response for key {}: status={}", idempotencyKey, result.get("status"));
         return result;
     }
+
+    public Map<String, Object> getPayment(String paymentId) {
+        return restClient.get()
+                .uri("/v1/payments/{id}", paymentId)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
+    public Map<String, Object> resolvePayment(String paymentId, String action) {
+        return restClient.post()
+                .uri("/v1/payments/{id}/resolve?action={a}", paymentId, action)
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
 }

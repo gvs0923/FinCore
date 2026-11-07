@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -113,6 +114,7 @@ public class PaymentService {
                 cardFingerprint, deviceFingerprint, ipAddress);
 
         String riskDecision = riskDecision(risk, amount);
+        publishRiskEvent(payment, riskDecision, risk);
         if ("BLOCK".equals(riskDecision)) {
             payment.markDeclined("RISK_BLOCK");
             paymentRepository.save(payment);
@@ -174,6 +176,21 @@ public class PaymentService {
                 new OutboxEvent("Payment", p.getId(), eventType, payload));
     }
 
+    @SuppressWarnings("unchecked")
+    private void publishRiskEvent(Payment p, String decision,
+                                  Map<String, Object> risk) {
+        int score = risk != null && risk.get("score") instanceof Number n
+                ? n.intValue() : 0;
+        String rules = risk != null && risk.get("firedRules") instanceof List<?> l
+                ? String.join(",", l.stream().map(Object::toString).toList()) : "";
+        String payload = """
+                {"paymentId":"%s","decision":"%s","score":%d,"firedRules":"%s"}"""
+                .formatted(p.getId(), decision, score, rules);
+        outboxEventRepository.save(
+                new OutboxEvent("Payment", p.getId(),
+                        "risk.assessed", payload));
+    }
+
     /**
      * Fail-closed for large amounts, fail-open for small ones: when the
      * risk service is down, a cheap local rule stands in. An outage must
@@ -195,5 +212,57 @@ public class PaymentService {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+        /**
+     * Resolve a REVIEW payment. Approve → capture via the stored processor
+     * reference; reject → decline. Internal use only (admin queue).
+     */
+    @Transactional
+    public Payment resolveReviewedPayment(UUID paymentId, boolean approve) {
+        Payment payment = paymentRepository.findByIdForUpdate(paymentId).orElseThrow(
+                () -> new PaymentNotFoundException(paymentId));
+
+        if (payment.getStatus() != PaymentStatus.REVIEW) {
+            throw new IllegalStateException(
+                    "Payment " + paymentId + " is " + payment.getStatus()
+                    + ", not REVIEW");
+        }
+
+        if (!approve) {
+            payment.markDeclined("RISK_REVIEW_REJECTED");
+            paymentRepository.save(payment);
+            publishEvent(payment, "payment.declined");
+            log.info("Reviewed payment {} rejected by analyst", paymentId);
+            return payment;
+        }
+
+        // Re-capture with the processor ref recorded at authorize time
+        List<PaymentAttempt> attempts =
+                attemptRepository.findByPaymentIdOrderByAttemptNumberAsc(paymentId);
+        String authRef = attempts.stream()
+                .filter(a -> "AUTHORIZED".equals(a.getStatus()))
+                .map(PaymentAttempt::getProcessorRef)
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException(
+                        "No authorization attempt for " + paymentId));
+
+        ProcessorResult capResult = paymentProcessor.capture(authRef);
+        attemptRepository.save(new PaymentAttempt(
+                payment, attempts.size() + 1,
+                capResult.success() ? "CAPTURED" : "CAPTURE_FAILED",
+                capResult.processorRef(), capResult.declineReason()));
+        if (!capResult.success()) {
+            payment.transitionTo(PaymentStatus.CAPTURE_FAILED);
+            paymentRepository.save(payment);
+            publishEvent(payment, "payment.capture_failed");
+            return payment;
+        }
+
+        payment.markCaptured("payment:" + paymentId);
+        paymentRepository.save(payment);
+        publishEvent(payment, "payment.captured");
+        log.info("Reviewed payment {} approved and captured", paymentId);
+        return payment;
     }
 }
