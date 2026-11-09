@@ -1,12 +1,12 @@
 package com.fincore.checkout.client;
 
+import com.fincore.checkout.api.admin.RiskViews;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
-import java.util.Map;
 
 @Component
 public class RiskAdminClient {
@@ -18,7 +18,7 @@ public class RiskAdminClient {
         this.restClient = RestClient.builder().baseUrl(baseUrl).build();
     }
 
-    public List<Map<String, Object>> reviewQueue() {
+    public List<RiskViews.ReviewItem> reviewQueue() {
         return restClient.get()
                 .uri("/v1/risk/review-queue")
                 .retrieve()

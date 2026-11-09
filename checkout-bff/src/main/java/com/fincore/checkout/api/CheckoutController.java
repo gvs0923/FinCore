@@ -80,6 +80,7 @@ public SseEmitter sessionEvents(@PathVariable String sessionId) {
                 Thread.sleep(500);
                 CheckoutSession s = checkoutService.getSession(sessionId);
                 if (s.getStatus() == CheckoutStatus.SUCCEEDED
+                        || s.getStatus() == CheckoutStatus.REVIEW
                         || s.getStatus() == CheckoutStatus.FAILED) {
                     emitter.send(SseEmitter.event()
                             .name("status")

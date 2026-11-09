@@ -49,18 +49,18 @@ public class AdminController {
     }
 
     @GetMapping("/overview")
-    public Map<String, Object> overview() {
+    public RiskViews.Overview overview() {
         Instant to = Instant.now();
         Instant from = to.minus(Duration.ofHours(24));
-        return Map.of(
-                "window", Map.of("from", from.toString(), "to", to.toString()),
-                "payments", metricsClient.paymentSummary(from, to),
-                "traffic", metricsClient.requestSummary(from, to),
-                "ledger", metricsClient.ledgerSummary(from, to),
-                "risk", metricsClient.riskSummary(from, to),
-                "health", Map.of(
-                        "status", metricsClient.status(),
-                        "lag", metricsClient.lag()));
+        return new RiskViews.Overview(
+        Map.of("from", from.toString(), "to", to.toString()),
+        metricsClient.paymentSummary(from, to),
+        metricsClient.requestSummary(from, to),
+        metricsClient.ledgerSummary(from, to),
+        metricsClient.riskSummary(from, to),
+        Map.of(
+                "status", metricsClient.status(),
+                "lag", metricsClient.lag()));
     }
 
     @GetMapping("/integrity/balances")
@@ -98,7 +98,7 @@ public class AdminController {
     }
 
     @GetMapping("/risk/queue")
-    public List<Map<String, Object>> riskQueue() {
+    public List<RiskViews.ReviewItem> riskQueue() {
         return riskAdminClient.reviewQueue();
     }
 

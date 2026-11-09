@@ -188,11 +188,12 @@ public class MetricsQueryService {
     /** Risk decision counts in [from, to) — one row per decision. */
     public List<Map<String, Object>> riskByDecision(Instant from, Instant to) {
         return jdbc.queryForList("""
-                SELECT decision, SUM(decision_count) AS count
-                FROM risk_metrics_hourly
-                WHERE window_start >= ? AND window_start < ?
-                GROUP BY decision
-                """, Timestamp.from(from), Timestamp.from(to));
+        SELECT decision, SUM(decision_count) AS count
+        FROM risk_decision_metrics_hourly
+        WHERE window_start >= ? AND window_start < ?
+        GROUP BY decision
+        ORDER BY decision
+        """, Timestamp.from(from), Timestamp.from(to));
     }
 
     /** Top fired risk rules in [from, to) — '' means "no rule fired". */
@@ -207,5 +208,16 @@ public class MetricsQueryService {
                 ORDER BY count DESC
                 LIMIT ?
                 """, Timestamp.from(from), Timestamp.from(to), limit);
+    }
+
+    public List<Map<String, Object>> riskScoreDistribution(
+        Instant from, Instant to) {
+    return jdbc.queryForList("""
+            SELECT score_bucket, SUM(decision_count) AS count
+            FROM risk_decision_metrics_hourly
+            WHERE window_start >= ? AND window_start < ?
+            GROUP BY score_bucket
+            ORDER BY score_bucket
+            """, Timestamp.from(from), Timestamp.from(to));
     }
 }

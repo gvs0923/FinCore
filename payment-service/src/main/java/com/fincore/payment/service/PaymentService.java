@@ -17,6 +17,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.ObjectMapper;
+
+import java.time.Instant;
+import java.util.HashMap;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -35,6 +40,7 @@ public class PaymentService {
     private final OutboxEventRepository outboxEventRepository;
     private final PaymentProcessor paymentProcessor;
     private final RiskClient riskClient;
+    private final ObjectMapper riskJson = new ObjectMapper();
 
     public PaymentService(PaymentRepository paymentRepository,
                           PaymentAttemptRepository attemptRepository,
@@ -178,18 +184,31 @@ public class PaymentService {
 
     @SuppressWarnings("unchecked")
     private void publishRiskEvent(Payment p, String decision,
-                                  Map<String, Object> risk) {
-        int score = risk != null && risk.get("score") instanceof Number n
-                ? n.intValue() : 0;
-        String rules = risk != null && risk.get("firedRules") instanceof List<?> l
-                ? String.join(",", l.stream().map(Object::toString).toList()) : "";
-        String payload = """
-                {"paymentId":"%s","decision":"%s","score":%d,"firedRules":"%s"}"""
-                .formatted(p.getId(), decision, score, rules);
-        outboxEventRepository.save(
-                new OutboxEvent("Payment", p.getId(),
-                        "risk.assessed", payload));
-    }
+                              Map<String, Object> risk) {
+    Map<String, Object> payload = new HashMap<>();
+
+    payload.put("eventId", UUID.randomUUID().toString());
+    payload.put("occurredAt", Instant.now().toString());
+    payload.put("paymentId", p.getId().toString());
+    payload.put("decision", decision);
+
+    int score = risk != null && risk.get("score") instanceof Number number
+            ? number.intValue() : -1;
+
+    String rules = risk != null && risk.get("firedRules") instanceof List<?> list
+            ? String.join(",", list.stream().map(Object::toString).toList())
+            : "risk_unavailable";
+
+    payload.put("score", score);
+    payload.put("firedRules", rules);
+
+    outboxEventRepository.save(
+            new OutboxEvent(
+                    "Payment",
+                    p.getId(),
+                    "risk.assessed",
+                    riskJson.writeValueAsString(payload)));
+       }
 
     /**
      * Fail-closed for large amounts, fail-open for small ones: when the

@@ -38,12 +38,16 @@ public class RiskController {
     @GetMapping("/review-queue")
     public List<Map<String, Object>> reviewQueue() {
         return jdbc.queryForList("""
-                SELECT payment_id, score, fired_rules, created_at
-                FROM risk_decisions
-                WHERE decision = 'REVIEW' AND resolution IS NULL
-                ORDER BY created_at DESC
-                LIMIT 50
-                """);
+        SELECT payment_id,
+               score,
+               fired_rules,
+               signals::text AS signals,
+               created_at
+        FROM risk_decisions
+        WHERE decision = 'REVIEW' AND resolution IS NULL
+        ORDER BY created_at, id
+        LIMIT 50
+        """);
     }
 
     /**
