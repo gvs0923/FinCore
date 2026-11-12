@@ -38,7 +38,7 @@ async function fire(n: number) {
 
         setLog((previous) => [
           ...previous,
-          `#${i + 1}: ${result.status}`,
+          `#${i + 1}: ${result.status}${result.failureReason ? ` (${result.failureReason})` : ""}`,
         ]);
       } catch (error) {
         setLog((previous) => [

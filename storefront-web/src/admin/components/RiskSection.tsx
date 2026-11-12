@@ -29,7 +29,7 @@ export default function RiskSection({
 
       {loading ? (
         <p role="status">Loading risk metrics…</p>
-      ) : error || !risk ? (
+      ) : error || !risk || !Array.isArray(risk.scoreDistribution) ? (
         <p role="alert">Risk metrics are unavailable.</p>
       ) : (
         <>

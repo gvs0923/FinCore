@@ -104,14 +104,90 @@ class PaymentRiskIT {
 
     @Test
     void unavailableRiskAllowsSmallAmount() {
+        unavailable();
+
         assertThat(pay(5_000).getStatus())
                 .isEqualTo(PaymentStatus.CAPTURED);
     }
 
     @Test
     void unavailableRiskReviewsLargeAmount() {
+        unavailable();
+
         assertThat(pay(500_001).getStatus())
                 .isEqualTo(PaymentStatus.REVIEW);
+    }
+
+    @Test
+    void fallbackReviewCanBeApprovedWithoutCallingRiskAgain() {
+        unavailable();
+        assertThat(pay(500_000).getStatus()).isEqualTo(PaymentStatus.CAPTURED);
+        Payment payment = pay(500_001);
+        assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REVIEW);
+        org.mockito.Mockito.clearInvocations(risk);
+
+        assertThat(payments.resolveReviewedPayment(payment.getId(), true).getStatus())
+                .isEqualTo(PaymentStatus.CAPTURED);
+        org.mockito.Mockito.verifyNoInteractions(risk);
+        assertThat(attempts.findByPaymentIdOrderByAttemptNumberAsc(payment.getId()))
+                .filteredOn(attempt -> "CAPTURED".equals(attempt.getStatus()))
+                .hasSize(1);
+    }
+
+    @Test
+    void concurrentApprovalsCaptureOnlyOnce() throws Exception {
+        decision("REVIEW", 40);
+
+        Payment payment = pay(5_000);
+
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+
+        java.util.concurrent.Callable<String> approve = () -> {
+            ready.countDown();
+
+            if (!start.await(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                throw new AssertionError("Approval start signal timed out");
+            }
+
+            try {
+                return payments.resolveReviewedPayment(payment.getId(), true)
+                        .getStatus().name();
+            } catch (IllegalStateException e) {
+                return "CONFLICT";
+            }
+        };
+
+        try (var executor =
+                     java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(approve);
+            var second = executor.submit(approve);
+
+            try {
+                assertThat(ready.await(
+                        10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            } finally {
+                start.countDown();
+            }
+
+            assertThat(List.of(
+                    first.get(20, java.util.concurrent.TimeUnit.SECONDS),
+                    second.get(20, java.util.concurrent.TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder("CAPTURED", "CONFLICT");
+        }
+
+        assertThat(attempts.findByPaymentIdOrderByAttemptNumberAsc(payment.getId()))
+                .filteredOn(attempt -> "CAPTURED".equals(attempt.getStatus()))
+                .hasSize(1);
+    }
+
+    // Mockito's default returns an empty Map, not the null the real
+    // RiskClient produces on outage — stub null explicitly.
+    private void unavailable() {
+        when(risk.assess(
+                anyString(), anyLong(), anyString(),
+                anyString(), anyString(), anyString(), anyMap()))
+                .thenReturn(null);
     }
 
     private void decision(String value, int score) {

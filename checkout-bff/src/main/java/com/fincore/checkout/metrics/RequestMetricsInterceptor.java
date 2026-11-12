@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.HandlerMapping;
 
 @Component
 public class RequestMetricsInterceptor implements HandlerInterceptor {
@@ -32,7 +33,8 @@ public class RequestMetricsInterceptor implements HandlerInterceptor {
         if (start == null) return;
 
         long latencyMs = (System.nanoTime() - start) / 1_000_000;
-        String route = request.getMethod() + " " + request.getRequestURI();
+        Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        String route = request.getMethod() + " " + (pattern != null ? pattern : "UNMATCHED");
         int statusClass = (response.getStatus() / 100) * 100;   // 200, 400, 500
 
         String payload = String.format(

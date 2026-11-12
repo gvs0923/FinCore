@@ -30,6 +30,57 @@ class MetricsRollupIT {
     @Autowired
     private RiskMetricsConsumer riskConsumer;
 
+    @Autowired
+    private org.springframework.web.context.WebApplicationContext webContext;
+
+    @Test
+    void riskSummaryIncludesDecisionsScoresAndRulesWithoutDoubleCounting() throws Exception {
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .webAppContextSetup(webContext).build();
+        java.time.Instant at = java.time.Instant.parse("2020-01-01T12:00:00Z");
+        String[] decisions = {"ALLOW", "REVIEW", "BLOCK"};
+        int[] scores = {0, -1, 65};
+        String[] rules = {"", "risk_unavailable", "card_velocity_block,new_device"};
+        for (int i = 0; i < decisions.length; i++) {
+            String paymentId = UUID.randomUUID().toString();
+            String event = """
+                    {"eventId":"%s","occurredAt":"%s","paymentId":"%s",
+                     "decision":"%s","score":%d,"firedRules":"%s"}
+                    """.formatted(UUID.randomUUID(), at, paymentId,
+                            decisions[i], scores[i], rules[i]);
+            riskConsumer.onRiskEvent(event, "risk.assessed", at.toEpochMilli(), paymentId);
+            riskConsumer.onRiskEvent(event, "risk.assessed", at.toEpochMilli(), paymentId);
+        }
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/metrics/risk/summary")
+                        .param("from", at.toString())
+                        .param("to", at.plusSeconds(3600).toString()))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.byDecision.length()").value(3))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.byDecision[*].count").value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(1))))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.scoreDistribution[*].score_bucket").value(
+                                org.hamcrest.Matchers.containsInAnyOrder("00-29", "60-89", "UNKNOWN")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.topRules[*].rule_fired").value(
+                                org.hamcrest.Matchers.containsInAnyOrder("risk_unavailable", "card_velocity_block", "new_device")));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/metrics/risk/summary")
+                        .param("from", at.minusSeconds(7200).toString())
+                        .param("to", at.minusSeconds(3600).toString()))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.byDecision").isEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.scoreDistribution").isEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.topRules").isEmpty());
+    }
+
     @Container
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:15-alpine")
             .withStartupTimeout(Duration.ofSeconds(120));

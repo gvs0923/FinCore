@@ -148,8 +148,8 @@ public class MetricsController {
             Instant to) {
         checkRange(from, to);
         return Map.of(
-        "byDecision", queries.riskByDecision(from, to),
-        "topRules", queries.riskTopRules(from, to, 5),
-        "scoreDistribution", queries.riskScoreDistribution(from, to));
-
+                "byDecision", queries.riskByDecision(from, to),
+                "topRules", queries.riskTopRules(from, to, 5),
+                "scoreDistribution", queries.riskScoreDistribution(from, to));
+    }
 }

@@ -84,9 +84,9 @@ public class PaymentService {
                                   Map<String, String> context) {
 
         // --- Step 1: Idempotency check ---
-        IdempotencyKey iKey = idempotencyKeyRepository.findById(idempotencyKey)
-                .orElseGet(() -> idempotencyKeyRepository.save(
-                        new IdempotencyKey(idempotencyKey)));
+        idempotencyKeyRepository.provision(idempotencyKey);
+        IdempotencyKey iKey = idempotencyKeyRepository.findForUpdate(idempotencyKey)
+                .orElseThrow();
 
         Payment payment;
         if (iKey.hasPayment()) {

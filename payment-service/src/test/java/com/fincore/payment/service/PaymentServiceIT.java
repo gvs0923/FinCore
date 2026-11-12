@@ -117,6 +117,32 @@ class PaymentServiceIT {
     }
 
     @Test
+    void concurrentSameKeyCreatesOneCapture() throws Exception {
+        String key = "concurrent-" + java.util.UUID.randomUUID();
+        var ready = new java.util.concurrent.CountDownLatch(2);
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<Payment> submit = () -> {
+                ready.countDown();
+                assertThat(start.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+                return paymentService.processPayment(key, "ORDER-CONCURRENT", 1000L, "USD",
+                        "4242".repeat(4), "VISA", "4242", "unknown-device", "unknown-ip");
+            };
+            var first = executor.submit(submit);
+            var second = executor.submit(submit);
+            assertThat(ready.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            start.countDown();
+            Payment payment = first.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            Payment duplicate = second.get(20, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(duplicate.getId()).isEqualTo(payment.getId());
+            assertThat(payment.getStatus()).isEqualTo(PaymentStatus.CAPTURED);
+            assertThat(duplicate.getStatus()).isEqualTo(PaymentStatus.CAPTURED);
+            assertThat(attemptRepository.findByPaymentIdOrderByAttemptNumberAsc(payment.getId()))
+                    .extracting(PaymentAttempt::getStatus).containsExactly("AUTHORIZED", "CAPTURED");
+        }
+    }
+
+    @Test
     void getPayment_returnsExistingPayment() {
         Payment created = paymentService.processPayment(
                 "idem-" + System.nanoTime(),

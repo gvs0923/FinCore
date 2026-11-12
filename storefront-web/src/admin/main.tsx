@@ -24,7 +24,7 @@ createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AdminGate>
-          <BrowserRouter basename="/admin.html">
+          <BrowserRouter basename="/admin">
             <Routes>
               <Route element={<AdminLayout />}>
                 <Route index element={<DashboardPage />} />

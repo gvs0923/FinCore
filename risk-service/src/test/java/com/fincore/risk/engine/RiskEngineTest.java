@@ -7,8 +7,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -113,6 +116,56 @@ class RiskEngineTest {
         assertThat(result.decision()).isEqualTo("REVIEW");
         assertThat(result.score()).isEqualTo(30);
         assertThat(result.firedRules()).containsExactly("ip_velocity");
+    }
+
+    @Test
+    void changedCountryProducesReview() {
+        when(devices.contextChanged(anyString(), anyString(), isNull()))
+                .thenReturn(false);
+        when(devices.contextChanged("device-1", "country", "CA"))
+                .thenReturn(true);
+
+        RiskResult result = engine.assess(new RiskRequest(
+                "payment-1",
+                10_000,
+                "USD",
+                "card-1",
+                "device-1",
+                "127.0.0.1",
+                Map.of("country", "CA")));
+
+        assertThat(result.decision()).isEqualTo("REVIEW");
+        assertThat(result.score()).isEqualTo(30);
+        assertThat(result.firedRules()).containsExactly("country_changed");
+    }
+
+    @Test
+    void timezoneAndLanguageChangesAreWeakSignals() {
+        when(devices.contextChanged(anyString(), anyString(), isNull()))
+                .thenReturn(false);
+        when(devices.contextChanged(
+                "device-1", "timezone", "Europe/London"))
+                .thenReturn(true);
+
+        when(devices.contextChanged(
+                "device-1", "language", "en-GB"))
+                .thenReturn(true);
+
+        RiskResult result = engine.assess(new RiskRequest(
+                "payment-1",
+                10_000,
+                "USD",
+                "card-1",
+                "device-1",
+                "127.0.0.1",
+                Map.of(
+                        "timezone", "Europe/London",
+                        "language", "en-GB")));
+
+        assertThat(result.decision()).isEqualTo("ALLOW");
+        assertThat(result.score()).isEqualTo(15);
+        assertThat(result.firedRules())
+                .containsExactly("timezone_changed", "language_changed");
     }
 
     private RiskRequest request(long amount) {

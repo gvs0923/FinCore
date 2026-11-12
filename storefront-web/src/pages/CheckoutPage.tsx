@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { getDeviceId } from "../lib/device";
@@ -36,7 +36,7 @@ export default function CheckoutPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<CheckoutFormInput, unknown, CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
@@ -46,8 +46,8 @@ export default function CheckoutPage() {
   const expiryField = register("expiry");
   const cvvField = register("cvv");
 
-  const watchedNumber = String(watch("cardNumber") ?? "");
-  const watchedExpiry = watch("expiry") ?? "";
+  const watchedNumber = String(useWatch({ control, name: "cardNumber" }) ?? "");
+  const watchedExpiry = useWatch({ control, name: "expiry" }) ?? "";
   const digits = watchedNumber.replace(/\D/g, "");
   const brand = detectCardBrand(digits);
   const total =
