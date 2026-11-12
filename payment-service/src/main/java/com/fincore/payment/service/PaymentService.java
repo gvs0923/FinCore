@@ -62,6 +62,26 @@ public class PaymentService {
                                   String cardNumber, String cardBrand,
                                   String cardLast4, String deviceFingerprint,
                                   String ipAddress) {
+        return processPayment(
+                idempotencyKey,
+                merchantRef,
+                amount,
+                currency,
+                cardNumber,
+                cardBrand,
+                cardLast4,
+                deviceFingerprint,
+                ipAddress,
+                Map.of());
+    }
+
+    @Transactional
+    public Payment processPayment(String idempotencyKey, String merchantRef,
+                                  long amount, String currency,
+                                  String cardNumber, String cardBrand,
+                                  String cardLast4, String deviceFingerprint,
+                                  String ipAddress,
+                                  Map<String, String> context) {
 
         // --- Step 1: Idempotency check ---
         IdempotencyKey iKey = idempotencyKeyRepository.findById(idempotencyKey)
@@ -117,7 +137,7 @@ public class PaymentService {
         String cardFingerprint = fingerprint(cardNumber);
         Map<String, Object> risk = riskClient.assess(
                 payment.getId().toString(), amount, currency,
-                cardFingerprint, deviceFingerprint, ipAddress);
+                cardFingerprint, deviceFingerprint, ipAddress, context);
 
         String riskDecision = riskDecision(risk, amount);
         publishRiskEvent(payment, riskDecision, risk);

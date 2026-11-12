@@ -47,7 +47,9 @@ export default function ReviewQueuePage() {
           {data.map((r) => (
             <tr key={r.payment_id}>
               <td className="py-2 font-mono text-xs">{r.payment_id}</td>
-              <td className="font-semibold text-amber-600">{r.score}</td>
+              <td className="font-semibold text-amber-600">
+              {r.score < 0 ? "Unavailable" : r.score}
+              </td>
               <td className="py-2 text-xs">
                 <details>
                   <summary className="cursor-pointer">

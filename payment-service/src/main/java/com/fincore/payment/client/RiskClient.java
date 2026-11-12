@@ -5,9 +5,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.Map;
 
 @Component
@@ -18,7 +21,16 @@ public class RiskClient {
     private final RestClient restClient;
 
     public RiskClient(@Value("${fincore.risk.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+        HttpClient http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(1))
+                .build();
+        JdkClientHttpRequestFactory factory =
+                new JdkClientHttpRequestFactory(http);
+        factory.setReadTimeout(Duration.ofSeconds(2));
+        this.restClient = RestClient.builder()
+                .baseUrl(baseUrl)
+                .requestFactory(factory)
+                .build();
     }
 
     /**
@@ -28,7 +40,8 @@ public class RiskClient {
      */
     public Map<String, Object> assess(String paymentId, long amount,
                                       String currency, String cardFingerprint,
-                                      String deviceId, String ipAddress) {
+                                      String deviceId, String ipAddress,
+                                      Map<String, String> context) {
         try {
             return restClient.post()
                     .uri("/v1/risk/assess")
@@ -39,7 +52,8 @@ public class RiskClient {
                             "currency", currency,
                             "cardFingerprint", cardFingerprint,
                             "deviceId", deviceId,
-                            "ipAddress", ipAddress))
+                            "ipAddress", ipAddress,
+                            "context", context))
                     .retrieve()
                     .body(new ParameterizedTypeReference<>() {});
         } catch (Exception e) {

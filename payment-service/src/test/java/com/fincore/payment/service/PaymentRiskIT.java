@@ -19,6 +19,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -116,7 +117,7 @@ class PaymentRiskIT {
     private void decision(String value, int score) {
         when(risk.assess(
                 anyString(), anyLong(), anyString(),
-                anyString(), anyString(), anyString()))
+                anyString(), anyString(), anyString(), anyMap()))
                 .thenReturn(Map.of(
                         "decision", value,
                         "score", score,

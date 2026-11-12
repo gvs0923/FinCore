@@ -42,7 +42,8 @@ public class PaymentController {
                 request.cardBrand(),
                 request.cardLast4(),
                 request.deviceFingerprint() != null ? request.deviceFingerprint() : "unknown-device",
-                request.ipAddress() != null ? request.ipAddress() : "unknown-ip"
+                request.ipAddress() != null ? request.ipAddress() : "unknown-ip",
+                request.context() != null ? request.context() : java.util.Map.of()
         );
 
         return PaymentResponse.from(payment);

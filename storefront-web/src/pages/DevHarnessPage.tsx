@@ -27,7 +27,13 @@ async function fire(n: number) {
           TEST_CARD,
           "VISA",
           "4242",
-          { deviceId: getDeviceId() },
+          {
+            deviceId: getDeviceId(),
+            context: {
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              country: "US",
+            },
+          },
         );
 
         setLog((previous) => [

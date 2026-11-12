@@ -42,7 +42,8 @@ public class CheckoutController {
                 sessionId, request.cardNumber(), request.cardBrand(),
                 request.cardLast4(),
                 request.deviceId() != null ? request.deviceId() : "unknown",
-                http.getRemoteAddr());
+                http.getRemoteAddr(),
+                RiskContext.from(request.context(), http.getLocale()));
         return SessionResponse.from(session);
     }
 

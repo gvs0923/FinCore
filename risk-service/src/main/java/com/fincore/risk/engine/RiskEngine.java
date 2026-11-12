@@ -64,6 +64,27 @@ public class RiskEngine {
           fired.add("new_device");
         }
 
+        // Rule 5: device context drift — weak signals, add scrutiny not blocks
+        boolean countryChanged = devices.contextChanged(
+                r.deviceId(), "country", r.context().get("country"));
+        boolean timezoneChanged = devices.contextChanged(
+                r.deviceId(), "timezone", r.context().get("timezone"));
+        boolean languageChanged = devices.contextChanged(
+                r.deviceId(), "language", r.context().get("language"));
+
+        if (countryChanged) {
+            score += 30;
+            fired.add("country_changed");
+        }
+        if (timezoneChanged) {
+            score += 10;
+            fired.add("timezone_changed");
+        }
+        if (languageChanged) {
+            score += 5;
+            fired.add("language_changed");
+        }
+
         String decision = score >= BLOCK_AT ? "BLOCK"
                         : score >= REVIEW_AT ? "REVIEW" : "ALLOW";
 
@@ -71,7 +92,10 @@ public class RiskEngine {
         "cardHits", cardHits,
         "ipHits", ipHits,
         "newDevice", newDevice,
-        "highAmount", r.amount() > HIGH_AMOUNT_MINOR);
+        "highAmount", r.amount() > HIGH_AMOUNT_MINOR,
+        "countryChanged", countryChanged,
+        "timezoneChanged", timezoneChanged,
+        "languageChanged", languageChanged);
 
         jdbc.update("""
         INSERT INTO risk_decisions

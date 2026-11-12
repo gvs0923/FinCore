@@ -36,7 +36,8 @@ public class CheckoutService {
 
     public CheckoutSession pay(String sessionId, String cardNumber,
                            String cardBrand, String cardLast4,
-                           String deviceId, String ipAddress) {
+                           String deviceId, String ipAddress,
+                           Map<String, String> context) {
         CheckoutSession session = getSession(sessionId);
 
         if (session.getStatus() == CheckoutStatus.SUCCEEDED
@@ -62,7 +63,8 @@ public class CheckoutService {
                     "checkout-" + sessionId,
                     session.getAmount(),
                     session.getCurrency(),
-                    cardNumber, cardBrand, cardLast4, deviceId, ipAddress
+                    cardNumber, cardBrand, cardLast4, deviceId, ipAddress,
+                    context
             );
 
             String status = (String) result.get("status");

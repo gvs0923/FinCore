@@ -23,7 +23,7 @@ export function createSession(amount: number, currency: string, description: str
 
 export type PaySignals = Pick<
   components["schemas"]["PaySessionRequest"],
-  "deviceId"
+  "deviceId" | "context"
 >;
 export function paySession(sessionId: string, cardNumber: string, cardBrand: string,
                            cardLast4: string, signals: PaySignals) {

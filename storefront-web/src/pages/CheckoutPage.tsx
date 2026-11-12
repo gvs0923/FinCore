@@ -25,6 +25,7 @@ export default function CheckoutPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [country, setCountry] = useState("US");
 
   const { data: session } = useQuery({
     queryKey: ["session", sessionId],
@@ -61,6 +62,10 @@ export default function CheckoutPage() {
       const cardLast4 = values.cardNumber.slice(-4);
       await paySession(sessionId, values.cardNumber, brand, cardLast4, {
         deviceId: getDeviceId(),
+        context: {
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          country,
+        },
       });
       navigate(`/result/${sessionId}`);
     } catch (e) {
@@ -153,6 +158,23 @@ export default function CheckoutPage() {
                 {errors.cvv && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.cvv.message}</p>}
               </div>
             </div>
+            <div>
+              <label htmlFor="country" className="mb-1 block text-sm font-medium">
+                Declared country
+              </label>
+              <select
+                id="country"
+                value={country}
+                onChange={(event) => setCountry(event.target.value)}
+                className={inputClass}
+              >
+                <option value="US">United States</option>
+                <option value="CA">Canada</option>
+                <option value="GB">United Kingdom</option>
+                <option value="IN">India</option>
+                <option value="AU">Australia</option>
+              </select>
+            </div>
             <button
               type="submit"
               disabled={isSubmitting}
@@ -162,8 +184,10 @@ export default function CheckoutPage() {
             </button>
             {submitError && <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>}
             <p className="text-xs text-slate-500">
-              This demo uses a browser ID stored for reuse and your connection
-              address for payment-risk checks. Test cards only.
+              This demo uses a browser ID stored for reuse, your timezone,
+              primary request language, declared country, and connection address
+              for payment-risk checks. Country is self-declared, not geolocated.
+              Test cards only.
             </p>
             <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
               Retrying is safe &mdash; this session reuses the same idempotency key.
