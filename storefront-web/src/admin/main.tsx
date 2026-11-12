@@ -7,6 +7,7 @@ import { ThemeProvider } from "../theme/ThemeProvider";
 import AdminGate from "./components/AdminGate";
 import AdminLayout from "./components/AdminLayout";
 import DashboardPage from "./pages/DashboardPage";
+import ReviewQueuePage from "./pages/ReviewQueuePage";
 import StubPage from "./pages/StubPage";
 
 const queryClient = new QueryClient({
@@ -30,6 +31,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="traffic" element={<StubPage title="Traffic" />} />
                 <Route path="payments" element={<StubPage title="Payments" />} />
                 <Route path="ledger" element={<StubPage title="Ledger" />} />
+                <Route path="risk" element={<ReviewQueuePage />} />
               </Route>
             </Routes>
           </BrowserRouter>

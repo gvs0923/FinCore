@@ -22,6 +22,7 @@ import {
 } from "recharts";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import RiskSection from "../components/RiskSection";
 
 const RANGE_OPTIONS = [
   { label: "24h", hours: 24 },
@@ -386,6 +387,12 @@ export default function DashboardPage() {
           </ul>
         )}
       </div>
+
+      <RiskSection
+        risk={overview.data?.risk}
+        loading={overview.isLoading}
+        error={overview.isError}
+      />
 
       {/* Ledger & Health */}
       <div className="mt-8 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">

@@ -61,7 +61,6 @@ export default function CheckoutPage() {
       const cardLast4 = values.cardNumber.slice(-4);
       await paySession(sessionId, values.cardNumber, brand, cardLast4, {
         deviceId: getDeviceId(),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       navigate(`/result/${sessionId}`);
     } catch (e) {
@@ -162,6 +161,10 @@ export default function CheckoutPage() {
               {isSubmitting ? "Processing\u2026" : total ? `Pay ${total}` : "Pay"}
             </button>
             {submitError && <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>}
+            <p className="text-xs text-slate-500">
+              This demo uses a browser ID stored for reuse and your connection
+              address for payment-risk checks. Test cards only.
+            </p>
             <p className="text-center text-[11px] text-slate-400 dark:text-slate-500">
               Retrying is safe &mdash; this session reuses the same idempotency key.
             </p>

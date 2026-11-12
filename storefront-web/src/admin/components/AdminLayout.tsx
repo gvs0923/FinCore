@@ -6,6 +6,7 @@ const NAV_ITEMS = [
   { to: "/traffic", label: "Traffic" },
   { to: "/payments", label: "Payments" },
   { to: "/ledger", label: "Ledger" },
+  { to: "/risk", label: "Risk" },
 ];
 
 export default function AdminLayout() {

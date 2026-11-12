@@ -27,6 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 class MetricsRollupIT {
 
+    @Autowired
+    private RiskMetricsConsumer riskConsumer;
+
     @Container
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:15-alpine")
             .withStartupTimeout(Duration.ofSeconds(120));
@@ -107,5 +110,67 @@ class MetricsRollupIT {
             }
         }
         throw new IllegalStateException("Port " + port + " not reachable after " + timeout);
+    }
+
+    @Test
+void riskEventCountsOneDecisionAndTwoRulesDespiteRedelivery() {
+    String eventId = UUID.randomUUID().toString();
+    String paymentId = UUID.randomUUID().toString();
+
+    java.time.Instant occurredAt = java.time.Instant.now();
+    java.sql.Timestamp window = java.sql.Timestamp.from(
+            occurredAt.truncatedTo(java.time.temporal.ChronoUnit.HOURS));
+
+    Long decisionsBefore = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(decision_count), 0)
+            FROM risk_decision_metrics_hourly
+            WHERE window_start = ?
+              AND decision = 'REVIEW'
+              AND score_bucket = '30-59'
+            """, Long.class, window);
+
+    Long rulesBefore = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(decision_count), 0)
+            FROM risk_metrics_hourly
+            WHERE window_start = ?
+              AND decision = 'REVIEW'
+              AND rule_fired IN ('high_amount', 'new_device')
+            """, Long.class, window);
+
+    String event = """
+            {
+              "eventId":"%s",
+              "occurredAt":"%s",
+              "paymentId":"%s",
+              "decision":"REVIEW",
+              "score":55,
+              "firedRules":"high_amount,new_device"
+            }
+            """.formatted(eventId, occurredAt, paymentId);
+
+    riskConsumer.onRiskEvent(
+            event, "risk.assessed", occurredAt.toEpochMilli(), paymentId);
+
+    riskConsumer.onRiskEvent(
+            event, "risk.assessed", occurredAt.toEpochMilli(), paymentId);
+
+    Long decisionsAfter = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(decision_count), 0)
+            FROM risk_decision_metrics_hourly
+            WHERE window_start = ?
+              AND decision = 'REVIEW'
+              AND score_bucket = '30-59'
+            """, Long.class, window);
+
+    Long rulesAfter = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(decision_count), 0)
+            FROM risk_metrics_hourly
+            WHERE window_start = ?
+              AND decision = 'REVIEW'
+              AND rule_fired IN ('high_amount', 'new_device')
+            """, Long.class, window);
+
+    assertThat(decisionsAfter - decisionsBefore).isEqualTo(1L);
+    assertThat(rulesAfter - rulesBefore).isEqualTo(2L);
     }
 }
