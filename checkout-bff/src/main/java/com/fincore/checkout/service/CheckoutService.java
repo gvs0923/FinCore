@@ -36,11 +36,13 @@ public class CheckoutService {
 
     public CheckoutSession pay(String sessionId, String cardNumber,
                            String cardBrand, String cardLast4,
-                           String deviceId, String ipAddress) {
+                           String deviceId, String ipAddress,
+                           Map<String, String> context) {
         CheckoutSession session = getSession(sessionId);
 
-        if (session.getStatus() == CheckoutStatus.SUCCEEDED) {
-            return session;
+        if (session.getStatus() == CheckoutStatus.SUCCEEDED
+        || session.getStatus() == CheckoutStatus.REVIEW) {
+        return session;
         }
 
         // Reset failure state so the session can be retried
@@ -61,7 +63,8 @@ public class CheckoutService {
                     "checkout-" + sessionId,
                     session.getAmount(),
                     session.getCurrency(),
-                    cardNumber, cardBrand, cardLast4, deviceId, ipAddress
+                    cardNumber, cardBrand, cardLast4, deviceId, ipAddress,
+                    context
             );
 
             String status = (String) result.get("status");
@@ -110,21 +113,14 @@ public class CheckoutService {
         // Ignore stale events from a previous attempt if the session
         // has already been retried (PROCESSING) or already reached a
         // terminal state via the synchronous pay response.
-        if (session.getStatus() != CheckoutStatus.PROCESSING) {
+        if (session.getStatus() != CheckoutStatus.PROCESSING
+                && session.getStatus() != CheckoutStatus.REVIEW) {
             log.debug("Ignoring Kafka event for session {} in state {}",
                     sessionId, session.getStatus());
             return;
         }
 
         if ("CAPTURED".equals(status)) {
-            session.markSucceeded(UUID.fromString(paymentId));
-            log.info("Session {} succeeded via Kafka event", sessionId);
-        } else if ("DECLINED".equals(status) || "CAPTURE_FAILED".equals(status)
-                   || "FAILED".equals(status)) {
-            session.markFailed(reason != null ? reason : status);
-            log.info("Session {} failed via Kafka event: {}",
-                    sessionId, reason);
-        }         if ("CAPTURED".equals(status)) {
             session.markSucceeded(UUID.fromString(paymentId));
             log.info("Session {} succeeded via Kafka event", sessionId);
         } else if ("REVIEW".equals(status)) {

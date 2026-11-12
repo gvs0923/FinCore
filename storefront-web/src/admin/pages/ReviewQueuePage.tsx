@@ -15,6 +15,17 @@ export default function ReviewQueuePage() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["risk-queue"] }),
   });
 
+  function requestResolution(id: string, action: "approve" | "reject") {
+    const message =
+      action === "approve"
+        ? "Approve this payment and capture its authorized amount?"
+        : "Reject this payment?";
+
+    if (window.confirm(message)) {
+      resolve.mutate({ id, action });
+    }
+  }
+
   if (isLoading) return <p className="p-6">Loading…</p>;
   if (error) return <p className="p-6 text-red-500">Failed to load queue.</p>;
   if (!data?.length)
@@ -36,14 +47,25 @@ export default function ReviewQueuePage() {
           {data.map((r) => (
             <tr key={r.payment_id}>
               <td className="py-2 font-mono text-xs">{r.payment_id}</td>
-              <td className="font-semibold text-amber-600">{r.score}</td>
-              <td className="font-mono text-xs">{r.fired_rules}</td>
+              <td className="font-semibold text-amber-600">
+              {r.score < 0 ? "Unavailable" : r.score}
+              </td>
+              <td className="py-2 text-xs">
+                <details>
+                  <summary className="cursor-pointer">
+                    {r.fired_rules || "No rule names recorded"}
+                  </summary>
+                  <pre className="mt-2 max-w-sm overflow-auto whitespace-pre-wrap">
+                    {r.signals}
+                  </pre>
+                </details>
+              </td>
               <td className="text-xs">{new Date(r.created_at).toLocaleString()}</td>
               <td className="space-x-2 text-right">
-                <button onClick={() => resolve.mutate({ id: r.payment_id, action: "approve" })}
+                <button onClick={() => requestResolution(r.payment_id, "approve")}
                   disabled={resolve.isPending}
                   className="rounded bg-emerald-600 px-2.5 py-1 text-xs text-white disabled:opacity-50">Approve</button>
-                <button onClick={() => resolve.mutate({ id: r.payment_id, action: "reject" })}
+                <button onClick={() => requestResolution(r.payment_id, "reject")}
                   disabled={resolve.isPending}
                   className="rounded bg-red-600 px-2.5 py-1 text-xs text-white disabled:opacity-50">Reject</button>
               </td>

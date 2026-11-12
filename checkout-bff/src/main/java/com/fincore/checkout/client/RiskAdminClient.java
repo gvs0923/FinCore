@@ -1,12 +1,15 @@
 package com.fincore.checkout.client;
 
+import com.fincore.checkout.api.admin.RiskViews;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
+import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 
 @Component
 public class RiskAdminClient {
@@ -15,12 +18,30 @@ public class RiskAdminClient {
 
     public RiskAdminClient(
             @Value("${fincore.risk.base-url:http://localhost:9096}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+        HttpClient http = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(1))
+                .build();
+        JdkClientHttpRequestFactory factory =
+                new JdkClientHttpRequestFactory(http);
+        factory.setReadTimeout(Duration.ofSeconds(2));
+        this.restClient = RestClient.builder()
+                .baseUrl(baseUrl)
+                .requestFactory(factory)
+                .build();
     }
 
-    public List<Map<String, Object>> reviewQueue() {
+    public List<RiskViews.ReviewItem> reviewQueue() {
         return restClient.get()
                 .uri("/v1/risk/review-queue")
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
+    }
+
+    public List<RiskViews.ReviewItem> reviewDetails(List<String> paymentIds) {
+        return restClient.post()
+                .uri("/v1/risk/review-details")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(paymentIds)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
     }

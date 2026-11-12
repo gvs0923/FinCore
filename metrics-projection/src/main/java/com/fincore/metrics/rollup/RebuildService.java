@@ -45,6 +45,7 @@ public class RebuildService {
         jdbc.execute("TRUNCATE payment_metrics_hourly, payment_metrics_daily,"
                 + " ledger_metrics_hourly, ledger_metrics_daily,"
                 + " request_metrics_hourly, request_metrics_daily,"
+                + " risk_metrics_hourly, risk_decision_metrics_hourly,"
                 + " processed_events");
         log.warn("Truncated all rollup tables for rebuild");
     }

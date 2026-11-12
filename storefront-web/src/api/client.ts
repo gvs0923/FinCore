@@ -21,11 +21,10 @@ export function createSession(amount: number, currency: string, description: str
   });
 }
 
-export interface PaySignals {
-  deviceId: string;
-  timezone: string;
-}
-
+export type PaySignals = Pick<
+  components["schemas"]["PaySessionRequest"],
+  "deviceId" | "context"
+>;
 export function paySession(sessionId: string, cardNumber: string, cardBrand: string,
                            cardLast4: string, signals: PaySignals) {
   return request<SessionResponse>(`/v1/checkout/sessions/${sessionId}/pay`, {

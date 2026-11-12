@@ -174,11 +174,59 @@ export interface components {
             cardBrand: string;
             cardLast4: string;
             deviceId?: string;
-            timezone?: string;
+            context?: {
+                [key: string]: string;
+            };
         };
         SseEmitter: {
             /** Format: int64 */
             timeout?: number;
+        };
+        ReviewItem: {
+            payment_id: string;
+            /** Format: int32 */
+            score: number;
+            fired_rules: string;
+            signals: string;
+            created_at: string;
+        };
+        DecisionCount: {
+            decision: string;
+            /** Format: int64 */
+            count: number;
+        };
+        Overview: {
+            window?: {
+                [key: string]: string;
+            };
+            payments?: {
+                [key: string]: unknown;
+            };
+            traffic?: {
+                [key: string]: unknown;
+            };
+            ledger?: {
+                [key: string]: unknown;
+            };
+            risk: components["schemas"]["RiskSummary"];
+            health?: {
+                [key: string]: unknown;
+            };
+        };
+        RiskSummary: {
+            byDecision: components["schemas"]["DecisionCount"][];
+            topRules: components["schemas"]["RuleCount"][];
+            scoreDistribution: components["schemas"]["ScoreCount"][];
+        };
+        RuleCount: {
+            rule_fired: string;
+            /** Format: int64 */
+            count: number;
+        };
+        ScoreCount: {
+            score_bucket: string;
+            /** Format: int64 */
+            count: number;
         };
     };
     responses: never;
@@ -324,9 +372,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    }[];
+                    "*/*": components["schemas"]["ReviewItem"][];
                 };
             };
         };
@@ -346,9 +392,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    };
+                    "*/*": components["schemas"]["Overview"];
                 };
             };
         };

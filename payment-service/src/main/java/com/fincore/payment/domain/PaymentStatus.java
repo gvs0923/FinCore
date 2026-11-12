@@ -36,7 +36,7 @@ public enum PaymentStatus {
     private static final Map<PaymentStatus, Set<PaymentStatus>> TRANSITIONS = Map.of(
             CREATED,        Set.of(AUTHORIZED, DECLINED, FAILED),
             AUTHORIZED,     Set.of(CAPTURED, CAPTURE_FAILED, REVIEW, DECLINED),
-            REVIEW,         Set.of(CAPTURED, DECLINED),
+            REVIEW,         Set.of(CAPTURED, DECLINED, CAPTURE_FAILED),
             CAPTURED,       Set.of(SETTLED),
             DECLINED,       Set.of(),
             CAPTURE_FAILED, Set.of(),

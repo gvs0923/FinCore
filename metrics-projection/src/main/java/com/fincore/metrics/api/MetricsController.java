@@ -149,7 +149,7 @@ public class MetricsController {
         checkRange(from, to);
         return Map.of(
                 "byDecision", queries.riskByDecision(from, to),
-                "topRules", queries.riskTopRules(from, to, 5));
+                "topRules", queries.riskTopRules(from, to, 5),
+                "scoreDistribution", queries.riskScoreDistribution(from, to));
     }
-
 }

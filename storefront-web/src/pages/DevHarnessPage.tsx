@@ -6,22 +6,53 @@ const TEST_CARD = "4242424242424242";
 
 export default function DevHarnessPage() {
   const [log, setLog] = useState<string[]>([]);
+  const [running, setRunning] = useState(false);
 
-  async function fire(n: number) {
+async function fire(n: number) {
+  if (running || n < 1 || n > 10) return;
+
+  setRunning(true);
+
+  try {
     for (let i = 0; i < n; i++) {
       try {
-        const s = await createSession(500, "USD", `harness-${i}`);
-        if (!s.sessionId) throw new Error("no sessionId in response");
-        const r = await paySession(s.sessionId, TEST_CARD, "VISA", "4242", {
-          deviceId: getDeviceId(),
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        });
-        setLog((l) => [...l, `#${i + 1}: ${r.status}`]);
-      } catch (e) {
-        setLog((l) => [...l, `#${i + 1}: ${e instanceof Error ? e.message : "err"}`]);
+        const session = await createSession(500, "USD", `harness-${i}`);
+
+        if (!session.sessionId) {
+          throw new Error("No sessionId in response");
+        }
+
+        const result = await paySession(
+          session.sessionId,
+          TEST_CARD,
+          "VISA",
+          "4242",
+          {
+            deviceId: getDeviceId(),
+            context: {
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              country: "US",
+            },
+          },
+        );
+
+        setLog((previous) => [
+          ...previous,
+          `#${i + 1}: ${result.status}${result.failureReason ? ` (${result.failureReason})` : ""}`,
+        ]);
+      } catch (error) {
+        setLog((previous) => [
+          ...previous,
+          `#${i + 1}: ${
+            error instanceof Error ? error.message : "Request failed"
+          }`,
+        ]);
       }
     }
+  } finally {
+    setRunning(false);
   }
+}
 
   if (!import.meta.env.DEV) return <p className="p-8">Dev only.</p>;
 
@@ -34,8 +65,8 @@ export default function DevHarnessPage() {
       </p>
       <div className="mt-4 flex gap-2">
         {[1, 5, 10].map((n) => (
-          <button key={n} onClick={() => fire(n)}
-            className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white">
+          <button key={n} onClick={() => fire(n)} disabled={running}
+            className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white disabled:opacity-50">
             Fire {n}
           </button>
         ))}

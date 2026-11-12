@@ -1,3 +1,5 @@
+import type { components } from "../../api/schema";
+
 const ADMIN_TOKEN_KEY = "fincore-admin-token";
 
 export function getAdminToken(): string {
@@ -79,6 +81,7 @@ export interface OverviewResponse {
   };
   traffic: TrafficSummary;
   ledger: LedgerSummary;
+  risk: RiskSummary;
   health: {
     status: MetricsStatus;
     lag: LagInfo;
@@ -155,12 +158,9 @@ export interface LedgerTimeseriesRow {
   total_credits: number;
 }
 
-export interface ReviewItem {
-  payment_id: string;
-  score: number;
-  fired_rules: string;
-  created_at: string;
-}
+export type ReviewItem = components["schemas"]["ReviewItem"];
+
+export type RiskSummary = components["schemas"]["RiskSummary"];
 
 export function fetchReviewQueue() {
   return adminRequest<ReviewItem[]>("/v1/admin/risk/queue");

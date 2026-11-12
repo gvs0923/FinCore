@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
+import java.util.UUID;
 import java.util.List;
 import java.util.Map;
 
@@ -38,12 +40,16 @@ public class RiskController {
     @GetMapping("/review-queue")
     public List<Map<String, Object>> reviewQueue() {
         return jdbc.queryForList("""
-                SELECT payment_id, score, fired_rules, created_at
-                FROM risk_decisions
-                WHERE decision = 'REVIEW' AND resolution IS NULL
-                ORDER BY created_at DESC
-                LIMIT 50
-                """);
+        SELECT payment_id,
+               score,
+               fired_rules,
+               signals::text AS signals,
+               created_at
+        FROM risk_decisions
+        WHERE decision = 'REVIEW' AND resolution IS NULL
+        ORDER BY created_at, id
+        LIMIT 50
+        """);
     }
 
     /**
@@ -64,5 +70,40 @@ public class RiskController {
                 WHERE payment_id = ? AND decision = 'REVIEW' AND resolution IS NULL
                 """, resolution, paymentId);
         return Map.of("paymentId", paymentId, "resolved", updated > 0);
+    }
+
+    @PostMapping("/review-details")
+    public List<Map<String, Object>> reviewDetails(
+        @RequestBody List<String> paymentIds) {
+
+    if (paymentIds == null || paymentIds.size() > 50) {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST, "At most 50 payment IDs are allowed");
+    }
+
+    if (paymentIds.isEmpty()) {
+        return List.of();
+    }
+
+    try {
+        paymentIds.forEach(UUID::fromString);
+    } catch (IllegalArgumentException e) {
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST, "Invalid payment ID");
+    }
+
+    return new NamedParameterJdbcTemplate(jdbc).queryForList("""
+            SELECT DISTINCT ON (payment_id)
+                   payment_id,
+                   score,
+                   fired_rules,
+                   signals::text AS signals,
+                   created_at
+            FROM risk_decisions
+            WHERE payment_id IN (:ids)
+              AND decision = 'REVIEW'
+              AND resolution IS NULL
+            ORDER BY payment_id, created_at DESC, id DESC
+            """, Map.of("ids", paymentIds));
     }
 }

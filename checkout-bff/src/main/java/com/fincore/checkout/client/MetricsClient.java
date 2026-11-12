@@ -1,4 +1,5 @@
 package com.fincore.checkout.client;
+import com.fincore.checkout.api.admin.RiskViews;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,11 +114,12 @@ public class MetricsClient {
     }
 
   @SuppressWarnings("unchecked")
-    public Map<String, Object> riskSummary(Instant from, Instant to) {
-        return (Map<String, Object>) cached("risk:" + from + ":" + to, () ->
-                restClient.get()
-                        .uri("/metrics/risk/summary?from={f}&to={t}", from, to)
-                        .retrieve()
-                        .body(new ParameterizedTypeReference<>() {}));
+    public RiskViews.RiskSummary riskSummary(Instant from, Instant to) {
+    return (RiskViews.RiskSummary) cached(
+            "risk:" + from + ":" + to,
+            () -> restClient.get()
+                    .uri("/metrics/risk/summary?from={f}&to={t}", from, to)
+                    .retrieve()
+                    .body(RiskViews.RiskSummary.class));
     }
 }

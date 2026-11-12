@@ -17,6 +17,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import tools.jackson.databind.ObjectMapper;
+
+import java.time.Instant;
+import java.util.HashMap;
+
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -35,6 +40,7 @@ public class PaymentService {
     private final OutboxEventRepository outboxEventRepository;
     private final PaymentProcessor paymentProcessor;
     private final RiskClient riskClient;
+    private final ObjectMapper riskJson = new ObjectMapper();
 
     public PaymentService(PaymentRepository paymentRepository,
                           PaymentAttemptRepository attemptRepository,
@@ -56,11 +62,31 @@ public class PaymentService {
                                   String cardNumber, String cardBrand,
                                   String cardLast4, String deviceFingerprint,
                                   String ipAddress) {
+        return processPayment(
+                idempotencyKey,
+                merchantRef,
+                amount,
+                currency,
+                cardNumber,
+                cardBrand,
+                cardLast4,
+                deviceFingerprint,
+                ipAddress,
+                Map.of());
+    }
+
+    @Transactional
+    public Payment processPayment(String idempotencyKey, String merchantRef,
+                                  long amount, String currency,
+                                  String cardNumber, String cardBrand,
+                                  String cardLast4, String deviceFingerprint,
+                                  String ipAddress,
+                                  Map<String, String> context) {
 
         // --- Step 1: Idempotency check ---
-        IdempotencyKey iKey = idempotencyKeyRepository.findById(idempotencyKey)
-                .orElseGet(() -> idempotencyKeyRepository.save(
-                        new IdempotencyKey(idempotencyKey)));
+        idempotencyKeyRepository.provision(idempotencyKey);
+        IdempotencyKey iKey = idempotencyKeyRepository.findForUpdate(idempotencyKey)
+                .orElseThrow();
 
         Payment payment;
         if (iKey.hasPayment()) {
@@ -111,7 +137,7 @@ public class PaymentService {
         String cardFingerprint = fingerprint(cardNumber);
         Map<String, Object> risk = riskClient.assess(
                 payment.getId().toString(), amount, currency,
-                cardFingerprint, deviceFingerprint, ipAddress);
+                cardFingerprint, deviceFingerprint, ipAddress, context);
 
         String riskDecision = riskDecision(risk, amount);
         publishRiskEvent(payment, riskDecision, risk);
@@ -178,18 +204,31 @@ public class PaymentService {
 
     @SuppressWarnings("unchecked")
     private void publishRiskEvent(Payment p, String decision,
-                                  Map<String, Object> risk) {
-        int score = risk != null && risk.get("score") instanceof Number n
-                ? n.intValue() : 0;
-        String rules = risk != null && risk.get("firedRules") instanceof List<?> l
-                ? String.join(",", l.stream().map(Object::toString).toList()) : "";
-        String payload = """
-                {"paymentId":"%s","decision":"%s","score":%d,"firedRules":"%s"}"""
-                .formatted(p.getId(), decision, score, rules);
-        outboxEventRepository.save(
-                new OutboxEvent("Payment", p.getId(),
-                        "risk.assessed", payload));
-    }
+                              Map<String, Object> risk) {
+    Map<String, Object> payload = new HashMap<>();
+
+    payload.put("eventId", UUID.randomUUID().toString());
+    payload.put("occurredAt", Instant.now().toString());
+    payload.put("paymentId", p.getId().toString());
+    payload.put("decision", decision);
+
+    int score = risk != null && risk.get("score") instanceof Number number
+            ? number.intValue() : -1;
+
+    String rules = risk != null && risk.get("firedRules") instanceof List<?> list
+            ? String.join(",", list.stream().map(Object::toString).toList())
+            : "risk_unavailable";
+
+    payload.put("score", score);
+    payload.put("firedRules", rules);
+
+    outboxEventRepository.save(
+            new OutboxEvent(
+                    "Payment",
+                    p.getId(),
+                    "risk.assessed",
+                    riskJson.writeValueAsString(payload)));
+       }
 
     /**
      * Fail-closed for large amounts, fail-open for small ones: when the

@@ -73,14 +73,21 @@ export default function ResultPage() {
   const { data: polledData, error } = useQuery({
     queryKey: ["session", sessionId],
     queryFn: () => getSession(sessionId!),
-    enabled: !!sessionId && !sseActive && !sseResult && !timedOut,
+    enabled:
+      !!sessionId &&
+      !sseActive &&
+      !timedOut &&
+      (!sseResult || sseResult.status === "REVIEW"),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "SUCCEEDED" || status === "FAILED" ? false : 1500;
     },
   });
 
-  const data = sseResult ?? polledData;
+  const data =
+    sseResult?.status === "REVIEW"
+      ? polledData ?? sseResult
+      : sseResult ?? polledData;
 
   if (error) {
     return (

@@ -27,6 +27,60 @@ import static org.assertj.core.api.Assertions.assertThat;
 })
 class MetricsRollupIT {
 
+    @Autowired
+    private RiskMetricsConsumer riskConsumer;
+
+    @Autowired
+    private org.springframework.web.context.WebApplicationContext webContext;
+
+    @Test
+    void riskSummaryIncludesDecisionsScoresAndRulesWithoutDoubleCounting() throws Exception {
+        var mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .webAppContextSetup(webContext).build();
+        java.time.Instant at = java.time.Instant.parse("2020-01-01T12:00:00Z");
+        String[] decisions = {"ALLOW", "REVIEW", "BLOCK"};
+        int[] scores = {0, -1, 65};
+        String[] rules = {"", "risk_unavailable", "card_velocity_block,new_device"};
+        for (int i = 0; i < decisions.length; i++) {
+            String paymentId = UUID.randomUUID().toString();
+            String event = """
+                    {"eventId":"%s","occurredAt":"%s","paymentId":"%s",
+                     "decision":"%s","score":%d,"firedRules":"%s"}
+                    """.formatted(UUID.randomUUID(), at, paymentId,
+                            decisions[i], scores[i], rules[i]);
+            riskConsumer.onRiskEvent(event, "risk.assessed", at.toEpochMilli(), paymentId);
+            riskConsumer.onRiskEvent(event, "risk.assessed", at.toEpochMilli(), paymentId);
+        }
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/metrics/risk/summary")
+                        .param("from", at.toString())
+                        .param("to", at.plusSeconds(3600).toString()))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.byDecision.length()").value(3))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.byDecision[*].count").value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(1))))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.scoreDistribution[*].score_bucket").value(
+                                org.hamcrest.Matchers.containsInAnyOrder("00-29", "60-89", "UNKNOWN")))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.topRules[*].rule_fired").value(
+                                org.hamcrest.Matchers.containsInAnyOrder("risk_unavailable", "card_velocity_block", "new_device")));
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/metrics/risk/summary")
+                        .param("from", at.minusSeconds(7200).toString())
+                        .param("to", at.minusSeconds(3600).toString()))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.byDecision").isEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.scoreDistribution").isEmpty())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.topRules").isEmpty());
+    }
+
     @Container
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:15-alpine")
             .withStartupTimeout(Duration.ofSeconds(120));
@@ -107,5 +161,67 @@ class MetricsRollupIT {
             }
         }
         throw new IllegalStateException("Port " + port + " not reachable after " + timeout);
+    }
+
+    @Test
+void riskEventCountsOneDecisionAndTwoRulesDespiteRedelivery() {
+    String eventId = UUID.randomUUID().toString();
+    String paymentId = UUID.randomUUID().toString();
+
+    java.time.Instant occurredAt = java.time.Instant.now();
+    java.sql.Timestamp window = java.sql.Timestamp.from(
+            occurredAt.truncatedTo(java.time.temporal.ChronoUnit.HOURS));
+
+    Long decisionsBefore = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(decision_count), 0)
+            FROM risk_decision_metrics_hourly
+            WHERE window_start = ?
+              AND decision = 'REVIEW'
+              AND score_bucket = '30-59'
+            """, Long.class, window);
+
+    Long rulesBefore = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(decision_count), 0)
+            FROM risk_metrics_hourly
+            WHERE window_start = ?
+              AND decision = 'REVIEW'
+              AND rule_fired IN ('high_amount', 'new_device')
+            """, Long.class, window);
+
+    String event = """
+            {
+              "eventId":"%s",
+              "occurredAt":"%s",
+              "paymentId":"%s",
+              "decision":"REVIEW",
+              "score":55,
+              "firedRules":"high_amount,new_device"
+            }
+            """.formatted(eventId, occurredAt, paymentId);
+
+    riskConsumer.onRiskEvent(
+            event, "risk.assessed", occurredAt.toEpochMilli(), paymentId);
+
+    riskConsumer.onRiskEvent(
+            event, "risk.assessed", occurredAt.toEpochMilli(), paymentId);
+
+    Long decisionsAfter = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(decision_count), 0)
+            FROM risk_decision_metrics_hourly
+            WHERE window_start = ?
+              AND decision = 'REVIEW'
+              AND score_bucket = '30-59'
+            """, Long.class, window);
+
+    Long rulesAfter = jdbc.queryForObject("""
+            SELECT COALESCE(SUM(decision_count), 0)
+            FROM risk_metrics_hourly
+            WHERE window_start = ?
+              AND decision = 'REVIEW'
+              AND rule_fired IN ('high_amount', 'new_device')
+            """, Long.class, window);
+
+    assertThat(decisionsAfter - decisionsBefore).isEqualTo(1L);
+    assertThat(rulesAfter - rulesBefore).isEqualTo(2L);
     }
 }

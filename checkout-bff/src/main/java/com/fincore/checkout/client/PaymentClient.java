@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -26,7 +27,8 @@ public class PaymentClient {
                                               long amount, String currency,
                                               String cardNumber, String cardBrand,
                                               String cardLast4, String deviceId,
-                                              String ipAddress) {
+                                              String ipAddress,
+                                              Map<String, String> context) {
         Map<String, Object> body = new HashMap<>();
         body.put("merchantRef", merchantRef);
         body.put("amount", amount);
@@ -36,6 +38,7 @@ public class PaymentClient {
         body.put("cardLast4", cardLast4);
         body.put("deviceFingerprint", deviceId);
         body.put("ipAddress", ipAddress);
+        body.put("context", context);
 
         Map<String, Object> result = restClient.post()
                 .uri("/v1/payments")
@@ -47,6 +50,15 @@ public class PaymentClient {
 
         log.info("Payment response for key {}: status={}", idempotencyKey, result.get("status"));
         return result;
+    }
+
+    public record PendingReview(String id, String createdAt) {}
+
+    public List<PendingReview> pendingReviews() {
+        return restClient.get()
+                .uri("/v1/payments/pending-reviews")
+                .retrieve()
+                .body(new ParameterizedTypeReference<>() {});
     }
 
     public Map<String, Object> getPayment(String paymentId) {
