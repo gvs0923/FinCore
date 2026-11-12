@@ -73,14 +73,21 @@ export default function ResultPage() {
   const { data: polledData, error } = useQuery({
     queryKey: ["session", sessionId],
     queryFn: () => getSession(sessionId!),
-    enabled: !!sessionId && !sseActive && !sseResult && !timedOut,
+    enabled:
+      !!sessionId &&
+      !sseActive &&
+      !timedOut &&
+      (!sseResult || sseResult.status === "REVIEW"),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status === "SUCCEEDED" || status === "FAILED" ? false : 1500;
     },
   });
 
-  const data = sseResult ?? polledData;
+  const data =
+    sseResult?.status === "REVIEW"
+      ? polledData ?? sseResult
+      : sseResult ?? polledData;
 
   if (error) {
     return (
@@ -156,6 +163,27 @@ export default function ResultPage() {
           className="mt-8 rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500"
         >
           Back to dashboard
+        </Link>
+      </Shell>
+    );
+  }
+
+    if (data.status === "REVIEW") {
+    return (
+      <Shell>
+        <StatusIcon variant="pending" />
+        <h1 className="mt-6 text-2xl font-bold text-amber-600 dark:text-amber-400">
+          Order pending review
+        </h1>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          Your payment is being reviewed by our team. We will notify you
+          once it is approved .
+        </p>
+        <Link
+          to="/"
+          className="mt-8 rounded-lg border border-slate-200 px-5 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+        >
+          Back to store
         </Link>
       </Shell>
     );

@@ -1,4 +1,5 @@
 package com.fincore.checkout.client;
+import com.fincore.checkout.api.admin.RiskViews;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,5 +111,15 @@ public class MetricsClient {
         Object body = fetch.get();
         cache.put(key, new CacheEntry(body, System.currentTimeMillis()));
         return body;
+    }
+
+  @SuppressWarnings("unchecked")
+    public RiskViews.RiskSummary riskSummary(Instant from, Instant to) {
+    return (RiskViews.RiskSummary) cached(
+            "risk:" + from + ":" + to,
+            () -> restClient.get()
+                    .uri("/metrics/risk/summary?from={f}&to={t}", from, to)
+                    .retrieve()
+                    .body(RiskViews.RiskSummary.class));
     }
 }

@@ -21,10 +21,15 @@ export function createSession(amount: number, currency: string, description: str
   });
 }
 
-export function paySession(sessionId: string, cardNumber: string, cardBrand: string, cardLast4: string) {
+export type PaySignals = Pick<
+  components["schemas"]["PaySessionRequest"],
+  "deviceId" | "context"
+>;
+export function paySession(sessionId: string, cardNumber: string, cardBrand: string,
+                           cardLast4: string, signals: PaySignals) {
   return request<SessionResponse>(`/v1/checkout/sessions/${sessionId}/pay`, {
     method: "POST",
-    body: JSON.stringify({ cardNumber, cardBrand, cardLast4 }),
+    body: JSON.stringify({ cardNumber, cardBrand, cardLast4, ...signals }),
   });
 }
 

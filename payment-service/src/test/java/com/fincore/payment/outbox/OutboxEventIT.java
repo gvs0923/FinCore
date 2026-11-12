@@ -31,7 +31,7 @@ class OutboxEventIT {
         Payment payment = paymentService.processPayment(
                 "outbox-test-" + System.nanoTime(),
                 "ORDER-OB1", 5000L, "USD",
-                "4242424242424242", "VISA", "4242"
+                "4242424242424242", "VISA", "4242", "unknown-device", "unknown-ip"
         );
 
         // Filter events for this specific payment
@@ -40,7 +40,8 @@ class OutboxEventIT {
                 .map(OutboxEvent::getEventType).toList();
 
         assertThat(types).containsExactly(
-                "payment.created", "payment.authorized", "payment.captured");
+                "payment.created", "payment.authorized", "risk.assessed",
+                "payment.captured");
     }
 
     @Test
@@ -48,7 +49,7 @@ class OutboxEventIT {
         Payment payment = paymentService.processPayment(
                 "outbox-test-" + System.nanoTime(),
                 "ORDER-OB2", 3000L, "USD",
-                "4000000000000002", "VISA", "0002"
+                "4000000000000002", "VISA", "0002", "unknown-device", "unknown-ip"
         );
 
         // Filter events for this specific payment

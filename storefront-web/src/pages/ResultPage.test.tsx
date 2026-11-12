@@ -46,6 +46,39 @@ function renderPage() {
 }
 
 describe("ResultPage", () => {
+  it.each([
+    ["SUCCEEDED", "Payment succeeded"],
+    ["FAILED", "Payment failed"],
+  ])("keeps polling after a REVIEW SSE event until %s", async (status, heading) => {
+    class ReviewEventSource {
+      onerror: (() => void) | null = null;
+      close() {}
+      addEventListener(name: string, callback: (event: MessageEvent) => void) {
+        if (name === "status") {
+          setTimeout(() => callback(new MessageEvent("status", {
+            data: JSON.stringify({ sessionId: SESSION_ID, status: "REVIEW" }),
+          })), 0);
+        }
+      }
+    }
+    Object.defineProperty(globalThis, "EventSource", {
+      configurable: true, writable: true, value: ReviewEventSource,
+    });
+    let reads = 0;
+    server.use(http.get("/v1/checkout/sessions/:id", () => HttpResponse.json({
+      sessionId: SESSION_ID,
+      paymentId: PAYMENT_ID,
+      amount: 5000,
+      currency: "USD",
+      status: ++reads === 1 ? "REVIEW" : status,
+    })));
+
+    renderPage();
+    expect(await screen.findByText("Order pending review")).toBeInTheDocument();
+    expect(screen.queryByText("Payment succeeded")).not.toBeInTheDocument();
+    expect(await screen.findByText(heading, {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(reads).toBeGreaterThanOrEqual(2);
+  });
   it("shows processing state while waiting for the API", async () => {
     // Return PROCESSING so the page shows the spinner text
     server.use(

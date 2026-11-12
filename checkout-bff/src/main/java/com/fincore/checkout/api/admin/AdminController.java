@@ -2,19 +2,29 @@ package com.fincore.checkout.api.admin;
 
 import com.fincore.checkout.client.LedgerAdminClient;
 import com.fincore.checkout.client.MetricsClient;
+import com.fincore.checkout.client.PaymentClient;
+import com.fincore.checkout.client.RiskAdminClient;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.client.RestClientException;
 
+import java.util.HashMap;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/v1/admin")
@@ -26,27 +36,37 @@ public class AdminController {
             Set.of("payment_count", "payment_volume",
                     "request_count", "ledger_transactions");
     private static final Duration MAX_RANGE = Duration.ofDays(31);
+    private static final Logger log =
+        LoggerFactory.getLogger(AdminController.class);
 
     private final MetricsClient metricsClient;
     private final LedgerAdminClient ledgerClient;
+    private final RiskAdminClient riskAdminClient;
+    private final PaymentClient paymentClient;
 
-    public AdminController(MetricsClient metricsClient, LedgerAdminClient ledgerClient) {
+    public AdminController(MetricsClient metricsClient,
+                           LedgerAdminClient ledgerClient,
+                           RiskAdminClient riskAdminClient,
+                           PaymentClient paymentClient) {
         this.metricsClient = metricsClient;
         this.ledgerClient = ledgerClient;
+        this.riskAdminClient = riskAdminClient;
+        this.paymentClient = paymentClient;
     }
 
     @GetMapping("/overview")
-    public Map<String, Object> overview() {
+    public RiskViews.Overview overview() {
         Instant to = Instant.now();
         Instant from = to.minus(Duration.ofHours(24));
-        return Map.of(
-                "window", Map.of("from", from.toString(), "to", to.toString()),
-                "payments", metricsClient.paymentSummary(from, to),
-                "traffic", metricsClient.requestSummary(from, to),
-                "ledger", metricsClient.ledgerSummary(from, to),
-                "health", Map.of(
-                        "status", metricsClient.status(),
-                        "lag", metricsClient.lag()));
+        return new RiskViews.Overview(
+        Map.of("from", from.toString(), "to", to.toString()),
+        metricsClient.paymentSummary(from, to),
+        metricsClient.requestSummary(from, to),
+        metricsClient.ledgerSummary(from, to),
+        metricsClient.riskSummary(from, to),
+        Map.of(
+                "status", metricsClient.status(),
+                "lag", metricsClient.lag()));
     }
 
     @GetMapping("/integrity/balances")
@@ -81,5 +101,81 @@ public class AdminController {
             case "ledger_transactions" -> metricsClient.ledgerTimeseries(from, to);
             default -> metricsClient.paymentTimeseries(from, to);
         };
+    }
+
+    @GetMapping("/risk/queue")
+    public List<RiskViews.ReviewItem> riskQueue() {
+    List<PaymentClient.PendingReview> pending =
+            paymentClient.pendingReviews();
+
+    if (pending == null || pending.isEmpty()) {
+        return List.of();
+    }
+
+    Map<String, RiskViews.ReviewItem> details = new HashMap<>();
+
+    try {
+        List<RiskViews.ReviewItem> assessments =
+                riskAdminClient.reviewDetails(
+                        pending.stream()
+                                .map(PaymentClient.PendingReview::id)
+                                .toList());
+
+        if (assessments != null) {
+            for (RiskViews.ReviewItem assessment : assessments) {
+                details.put(assessment.payment_id(), assessment);
+            }
+        }
+    } catch (RestClientException e) {
+        log.warn("Risk review details are unavailable");
+    }
+
+    return pending.stream()
+            .map(payment -> details.getOrDefault(
+                    payment.id(),
+                    new RiskViews.ReviewItem(
+                            payment.id(),
+                            -1,
+                            "assessment_details_unavailable",
+                            "{\"assessmentDetailsUnavailable\":true}",
+                            payment.createdAt())))
+            .toList();
+    }
+
+    @PostMapping("/risk/{paymentId}/resolve")
+    public Map<String, Object> resolveRisk(@PathVariable UUID paymentId,
+                                           @RequestParam String action) {
+        if (!"approve".equals(action) && !"reject".equals(action)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "action must be 'approve' or 'reject'");
+        }
+        String id = paymentId.toString();
+        try {
+            Map<String, Object> payment = paymentClient.resolvePayment(id, action);
+            markResolvedBestEffort(id, action);
+            return payment;
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment not found");
+        } catch (HttpClientErrorException.Conflict e) {
+            // Already out of REVIEW (another analyst, or an earlier attempt
+            // whose queue update failed): record what actually happened so
+            // the stale entry drains, then report the conflict.
+            Object status = paymentClient.getPayment(id).get("status");
+            if (!"REVIEW".equals(status)) {
+                markResolvedBestEffort(
+                          id,
+                          "CAPTURED".equals(status) ? "approve" : "reject");
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Payment is no longer under review (now " + status + ")");
+        }
+    }
+
+    private void markResolvedBestEffort(String paymentId, String action) {
+    try {
+        riskAdminClient.markResolved(paymentId, action);
+    } catch (RestClientException e) {
+        log.warn("Risk review resolution marker could not be updated");
+    }
     }
 }

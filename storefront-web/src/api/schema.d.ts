@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/risk/{paymentId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolveRisk"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/checkout/sessions/{sessionId}": {
         parameters: {
             query?: never;
@@ -44,6 +60,86 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/checkout/sessions/{sessionId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["sessionEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/risk/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["riskQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/metrics/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["timeseries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/integrity/balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ledgerIntegrity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -77,6 +173,60 @@ export interface components {
             cardNumber: string;
             cardBrand: string;
             cardLast4: string;
+            deviceId?: string;
+            context?: {
+                [key: string]: string;
+            };
+        };
+        SseEmitter: {
+            /** Format: int64 */
+            timeout?: number;
+        };
+        ReviewItem: {
+            payment_id: string;
+            /** Format: int32 */
+            score: number;
+            fired_rules: string;
+            signals: string;
+            created_at: string;
+        };
+        DecisionCount: {
+            decision: string;
+            /** Format: int64 */
+            count: number;
+        };
+        Overview: {
+            window?: {
+                [key: string]: string;
+            };
+            payments?: {
+                [key: string]: unknown;
+            };
+            traffic?: {
+                [key: string]: unknown;
+            };
+            ledger?: {
+                [key: string]: unknown;
+            };
+            risk: components["schemas"]["RiskSummary"];
+            health?: {
+                [key: string]: unknown;
+            };
+        };
+        RiskSummary: {
+            byDecision: components["schemas"]["DecisionCount"][];
+            topRules: components["schemas"]["RuleCount"][];
+            scoreDistribution: components["schemas"]["ScoreCount"][];
+        };
+        RuleCount: {
+            rule_fired: string;
+            /** Format: int64 */
+            count: number;
+        };
+        ScoreCount: {
+            score_bucket: string;
+            /** Format: int64 */
+            count: number;
         };
     };
     responses: never;
@@ -137,6 +287,32 @@ export interface operations {
             };
         };
     };
+    resolveRisk: {
+        parameters: {
+            query: {
+                action: string;
+            };
+            header?: never;
+            path: {
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     getSession: {
         parameters: {
             query?: never;
@@ -155,6 +331,117 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SessionResponse"];
+                };
+            };
+        };
+    };
+    sessionEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": components["schemas"]["SseEmitter"];
+                };
+            };
+        };
+    };
+    riskQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReviewItem"][];
+                };
+            };
+        };
+    };
+    overview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Overview"];
+                };
+            };
+        };
+    };
+    timeseries: {
+        parameters: {
+            query: {
+                metric: string;
+                from: string;
+                to: string;
+                bucket?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
+    ledgerIntegrity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

@@ -60,6 +60,7 @@ gradle build               # build all modules
 
 ## Documentation
 
+- [Phase 4: Risk service architecture guide](docs/ARCHITECTURE-GUIDE-risk-service.md) — rules, payment integration, review workflow, outage policy, design decisions, and verification
 - `docs/architecture/` — system design docs
 - `docs/decisions/` — Architecture Decision Records (ADRs)
 - `docs/reliability/` — failure scenarios, disaster recovery

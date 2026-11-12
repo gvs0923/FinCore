@@ -49,7 +49,8 @@ describe("CheckoutPage", () => {
 
   it("shows test card notice", () => {
     renderPage();
-    expect(screen.getByText(/test cards only/i)).toBeInTheDocument();
+    expect(screen.getByText(/test cards only — use/i)).toBeInTheDocument();
+    expect(screen.getByText(/country is self-declared/i)).toBeInTheDocument();
   });
 
   it("navigates to result page on successful payment", async () => {
