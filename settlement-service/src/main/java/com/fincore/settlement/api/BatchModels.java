@@ -34,4 +34,20 @@ public final class BatchModels {
             long feeMinor,
             String feePolicyVersion) {
     }
+
+        public record RefundRequest(
+            UUID paymentId,
+            String idempotencyKey,
+            String reason,
+            String actor) {
+    }
+
+    public record RefundResponse(
+            UUID id,
+            UUID paymentId,
+            long amountMinor,
+            String currency,
+            String status,
+            boolean replayed) {
+    }
 }

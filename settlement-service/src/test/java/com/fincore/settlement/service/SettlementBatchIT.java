@@ -27,7 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Testcontainers
 @SpringBootTest(properties = {
         "spring.kafka.listener.auto-startup=false",
-        "spring.kafka.admin.auto-create=false"
+        "spring.kafka.admin.auto-create=false",
+        "spring.task.scheduling.enabled=false"
 })
 class SettlementBatchIT {
 
@@ -39,9 +40,25 @@ class SettlementBatchIT {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
+        waitForPort("localhost", postgres.getFirstMappedPort());
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+    }
+
+    private static void waitForPort(String host, int port) {
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline) {
+            try (java.net.Socket ignored = new java.net.Socket(host, port)) {
+                return;
+            } catch (Exception e) {
+                try { Thread.sleep(200); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        throw new IllegalStateException(
+                "Postgres port not reachable in time");
     }
 
     @Autowired

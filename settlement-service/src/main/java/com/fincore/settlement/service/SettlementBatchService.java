@@ -148,20 +148,26 @@ public class SettlementBatchService {
                 SET capture_count = totals.capture_count,
                     gross_minor = totals.gross_minor,
                     fees_minor = totals.fees_minor,
+                    refunds_minor = totals.refunds_minor,
                     net_minor =
                         totals.gross_minor
                         - totals.fees_minor
-                        - refunds_minor,
+                        - totals.refunds_minor,
                     updated_at = CURRENT_TIMESTAMP
                 FROM (
                     SELECT
-                        COUNT(*) AS capture_count,
-                        COALESCE(SUM(amount_minor), 0)::BIGINT
+                        COUNT(i.payment_id) AS capture_count,
+                        COALESCE(SUM(i.amount_minor), 0)::BIGINT
                             AS gross_minor,
-                        COALESCE(SUM(fee_minor), 0)::BIGINT
-                            AS fees_minor
-                    FROM settlement_batch_items
-                    WHERE batch_id = ?
+                        COALESCE(SUM(i.fee_minor), 0)::BIGINT
+                            AS fees_minor,
+                        COALESCE(SUM(r.amount_minor), 0)::BIGINT
+                            AS refunds_minor
+                    FROM settlement_batch_items i
+                    LEFT JOIN settlement_refunds r
+                        ON r.payment_id = i.payment_id
+                        AND r.status = 'REFUNDED'
+                    WHERE i.batch_id = ?
                 ) totals
                 WHERE settlement_batches.id = ?
                 """,
