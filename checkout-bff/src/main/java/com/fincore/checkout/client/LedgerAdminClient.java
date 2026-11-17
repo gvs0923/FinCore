@@ -1,5 +1,6 @@
 package com.fincore.checkout.client;
 
+import com.fincore.checkout.api.admin.BackOfficeViews.*;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
@@ -24,27 +25,25 @@ public class LedgerAdminClient {
                 .body(new ParameterizedTypeReference<>() {});
     }
 
-        public List<Map<String, Object>> accounts() {
+        public List<LedgerAccount> accounts() {
         return restClient.get()
                 .uri("/internal/ledger/accounts")
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
     }
 
-    public List<Map<String, Object>> accountEntries(String accountRef) {
+    public List<LedgerEntryRow> accountEntries(String accountRef) {
         return restClient.get()
                 .uri("/internal/ledger/accounts/{ref}/entries",
-                        java.net.URLEncoder.encode(accountRef,
-                                java.nio.charset.StandardCharsets.UTF_8))
+                        accountRef)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
     }
 
-    public Map<String, Object> journal(String reference) {
+    public LedgerJournal journal(String reference) {
         return restClient.get()
                 .uri("/internal/ledger/transactions/{ref}",
-                        java.net.URLEncoder.encode(reference,
-                                java.nio.charset.StandardCharsets.UTF_8))
+                        reference)
                 .retrieve()
                 .body(new ParameterizedTypeReference<>() {});
     }

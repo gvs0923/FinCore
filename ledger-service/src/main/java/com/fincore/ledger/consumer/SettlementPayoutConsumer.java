@@ -40,13 +40,20 @@ public class SettlementPayoutConsumer {
                     e.get("feesMinor").asLong(), 2);
             BigDecimal net = BigDecimal.valueOf(
                     e.get("netMinor").asLong(), 2);
+            BigDecimal refunds = e.has("refundsMinor")
+                    ? BigDecimal.valueOf(e.get("refundsMinor").asLong(), 2)
+                    : gross.subtract(fees).subtract(net);
+            if (refunds.signum() < 0 || net.signum() <= 0
+                    || gross.subtract(refunds).compareTo(fees.add(net)) != 0) {
+                throw new IllegalArgumentException("Invalid payout totals");
+            }
 
             ledgerService.postTransaction(
                     reference,
                     "Settlement payout " + e.get("batchId").asText(),
                     List.of(
                         JournalLine.debit(
-                            "LIABILITY:MERCHANT_RECEIVABLE", gross),
+                            "LIABILITY:MERCHANT_RECEIVABLE", gross.subtract(refunds)),
                         JournalLine.credit(
                             "REVENUE:PROCESSOR_FEES", fees),
                         JournalLine.credit(

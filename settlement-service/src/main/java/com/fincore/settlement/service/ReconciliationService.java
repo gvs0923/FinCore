@@ -33,6 +33,13 @@ public class ReconciliationService {
             UUID batchId,
             String reportRef,
             List<SettlementRow> externalRows) {
+        if (reportRef == null || reportRef.isBlank() || reportRef.length() > 255
+                || externalRows == null || externalRows.size() > 10_000
+                || externalRows.stream().anyMatch(r -> r == null || r.processorRef() == null
+                    || r.processorRef().isBlank() || r.amountMinor() < 0 || r.feeMinor() < 0)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid processor report");
+        }
+        SettlementLocks.batch(jdbc, batchId);
 
         // Step 1: lock the batch row — nothing can refresh its items
         // while this transaction runs.

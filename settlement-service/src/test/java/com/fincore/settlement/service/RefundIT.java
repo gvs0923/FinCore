@@ -76,6 +76,8 @@ class RefundIT {
                   AND aggregate_id = ?""",
                 Long.class, paymentId);
         assertEquals(1L, events.longValue());
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM refund_audit_events WHERE refund_id = ? AND actor = 'admin1'",
+                Long.class, r.id()));
     }
 
     @Test
@@ -135,6 +137,62 @@ class RefundIT {
         assertThrows(ResponseStatusException.class,
                 () -> refunds.refund(
                         UUID.randomUUID(), "key-x", "reason", "admin"));
+    }
+
+    @Test
+    void concurrentSameKeyReplaysOneRefund() throws Exception {
+        UUID paymentId = capture(10_000);
+        String key = "concurrent-" + paymentId;
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> { start.await(); return refunds.refund(paymentId, key, "reason", "admin"); });
+            var second = executor.submit(() -> { start.await(); return refunds.refund(paymentId, key, "reason", "admin"); });
+            start.countDown();
+            var a = first.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            var b = second.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            assertEquals(a.id(), b.id());
+            assertNotEquals(a.replayed(), b.replayed());
+        }
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_outbox_events WHERE aggregate_id = ?", Long.class, paymentId));
+    }
+
+    @Test
+    void keyCannotBeReusedForAnotherPayment() {
+        UUID first = capture(10_000), second = capture(20_000);
+        String key = "bound-" + first;
+        refunds.refund(first, key, "reason", "admin");
+        var error = assertThrows(ResponseStatusException.class,
+                () -> refunds.refund(second, key, "reason", "admin"));
+        assertEquals(409, error.getStatusCode().value());
+    }
+
+    @Test
+    void refundUpdatesOpenBatchWithoutManualRefresh() {
+        String merchant = "merchant-" + UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        ingestion.ingest(new CapturedPayment(paymentId, merchant, "order-" + paymentId,
+                "capture-" + paymentId, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
+        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
+        refunds.refund(paymentId, "open-" + paymentId, "reason", "admin");
+        assertEquals(10_000, batches.get(batch.id()).refundsMinor());
+        assertEquals(-320, batches.get(batch.id()).netMinor());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"RECONCILED", "PAID_OUT"})
+    void frozenBatchRefundIsRejectedWithoutFinancialWrites(String status) {
+        String merchant = "merchant-" + UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        ingestion.ingest(new CapturedPayment(paymentId, merchant, "order-" + paymentId,
+                "capture-" + paymentId, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
+        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
+        jdbc.update("UPDATE settlement_batches SET status = ? WHERE id = ?", status, batch.id());
+        var error = assertThrows(ResponseStatusException.class,
+                () -> refunds.refund(paymentId, "frozen-" + paymentId, "reason", "admin"));
+        assertEquals(409, error.getStatusCode().value());
+        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_refunds WHERE payment_id = ?", Long.class, paymentId));
+        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_outbox_events WHERE aggregate_id = ?", Long.class, paymentId));
+        assertEquals(0, batches.get(batch.id()).refundsMinor());
     }
 
     private UUID capture(long amount) {

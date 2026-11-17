@@ -1,7 +1,6 @@
 package com.fincore.settlement.service;
 
 import com.fincore.settlement.api.BatchModels.RefundResponse;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -27,11 +26,31 @@ public class RefundService {
             String actor) {
 
         validate(paymentId, idempotencyKey, reason, actor);
+        SettlementLocks.key(jdbc, idempotencyKey);
 
         // --- Step 1: same key replayed? Return the original result.
         var byKey = findByIdempotencyKey(idempotencyKey);
         if (byKey != null) {
+            if (!byKey.paymentId().equals(paymentId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key belongs to another payment");
+            }
             return toResponse(byKey, true);
+        }
+
+        var merchants = jdbc.query("SELECT merchant_id FROM settlement_captures WHERE payment_id = ?",
+                (rs, n) -> rs.getString(1), paymentId);
+        if (merchants.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Captured payment not found");
+        }
+        SettlementLocks.merchant(jdbc, merchants.getFirst());
+        var frozen = jdbc.query("""
+                SELECT b.status FROM settlement_batch_items i
+                JOIN settlement_batches b ON b.id = i.batch_id
+                WHERE i.payment_id = ? AND b.status <> 'OPEN'
+                """, (rs, n) -> rs.getString(1), paymentId);
+        if (!frozen.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Refund requires a settlement adjustment: batch is already frozen");
         }
 
         // --- Step 2: lock the capture. Two refunds on the same
@@ -72,21 +91,24 @@ public class RefundService {
         String currency = (String) c[2];
         UUID refundId = UUID.randomUUID();
 
-        try {
-            jdbc.update("""
-                    INSERT INTO settlement_refunds (
-                        id, payment_id, idempotency_key,
-                        amount_minor, currency, reason, actor
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    refundId, paymentId, idempotencyKey,
-                    amount, currency, reason, actor);
-        } catch (DuplicateKeyException e) {
+        int inserted = jdbc.update("""
+                INSERT INTO settlement_refunds (
+                    id, payment_id, idempotency_key,
+                    amount_minor, currency, reason, actor
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (idempotency_key) DO NOTHING
+                """,
+                refundId, paymentId, idempotencyKey,
+                amount, currency, reason, actor);
+        if (inserted == 0) {
             // Same key arrived concurrently on another instance —
             // its row won; return that result.
-            return toResponse(
-                    findByIdempotencyKey(idempotencyKey), true);
+            var replay = findByIdempotencyKey(idempotencyKey);
+            if (replay == null || !replay.paymentId().equals(paymentId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Idempotency key conflict");
+            }
+            return toResponse(replay, true);
         }
 
         // --- Step 5: refund fact + ledger event in ONE transaction.
@@ -101,6 +123,19 @@ public class RefundService {
                 VALUES (?, ?, 'payment.refunded', ?::jsonb)
                 """,
                 UUID.randomUUID(), paymentId, payload);
+
+        jdbc.update("""
+                INSERT INTO refund_audit_events (id, refund_id, payment_id, actor, action, reason)
+                VALUES (?, ?, ?, ?, 'FULL_REFUND', ?)
+                """, UUID.randomUUID(), refundId, paymentId, actor, reason);
+
+        jdbc.update("""
+                UPDATE settlement_batches b
+                SET refunds_minor = b.refunds_minor + ?, net_minor = b.net_minor - ?,
+                    updated_at = CURRENT_TIMESTAMP
+                FROM settlement_batch_items i
+                WHERE i.batch_id = b.id AND i.payment_id = ? AND b.status = 'OPEN'
+                """, amount, amount, paymentId);
 
         return new RefundResponse(
                 refundId, paymentId, amount, currency, "REFUNDED", false);
@@ -133,7 +168,8 @@ public class RefundService {
         if (paymentId == null
                 || key == null || key.isBlank()
                 || reason == null || reason.isBlank()
-                || actor == null || actor.isBlank()) {
+                || actor == null || actor.isBlank()
+                || key.length() > 255 || reason.length() > 1000 || actor.length() > 128) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "paymentId, idempotencyKey, reason, actor required");

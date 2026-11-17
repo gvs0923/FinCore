@@ -1,5 +1,6 @@
 package com.fincore.checkout.api.admin;
 
+import com.fincore.checkout.api.admin.BackOfficeViews.*;
 import com.fincore.checkout.client.LedgerAdminClient;
 import com.fincore.checkout.client.MetricsClient;
 import com.fincore.checkout.client.PaymentClient;
@@ -185,14 +186,14 @@ public class AdminController {
     }
 
     @GetMapping("/settlement/batches")
-    public List<Map<String, Object>> settlementBatches(
+    public List<SettlementBatch> settlementBatches(
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") long offset) {
         return settlementClient.listBatches(limit, offset);
     }
 
      @PostMapping("/settlement/batches")
-    public Map<String, Object> createSettlementBatch(
+    public SettlementBatch createSettlementBatch(
             @RequestParam String merchantId,
             @RequestParam String currency,
             @RequestParam String settlementDate) {
@@ -201,13 +202,13 @@ public class AdminController {
     }
  
     @GetMapping("/settlement/batches/{batchId}")
-    public Map<String, Object> settlementBatch(
+    public SettlementBatch settlementBatch(
             @PathVariable UUID batchId) {
         return settlementClient.getBatch(batchId);
     }
  
     @GetMapping("/settlement/batches/{batchId}/items")
-    public List<Map<String, Object>> settlementBatchItems(
+    public List<BatchItem> settlementBatchItems(
             @PathVariable UUID batchId,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") long offset) {
@@ -219,39 +220,62 @@ public class AdminController {
     }
  
     @PostMapping("/settlement/batches/{batchId}/payout")
-    public Map<String, Object> settlementPayout(
+    public SettlementBatch settlementPayout(
             @PathVariable UUID batchId) {
         return settlementClient.payout(batchId);
     }
  
     @PostMapping("/settlement/batches/{batchId}/reconciliation")
-    public Map<String, Object> settlementReconcile(
+    public ReconciliationRun settlementReconcile(
             @PathVariable UUID batchId,
-            @RequestBody Map<String, Object> report) {
+            @RequestBody ProcessorReport report) {
         return settlementClient.importReport(batchId, report);
     }
  
+    @GetMapping("/settlement/batches/{batchId}/reconciliation-runs")
+    public List<ReconciliationRun> reconciliationRuns(@PathVariable UUID batchId) {
+        return settlementClient.runs(batchId);
+    }
+
+    @GetMapping("/settlement/reconciliation-runs/{runId}/items")
+    public List<ReconciliationItem> reconciliationItems(@PathVariable UUID runId) {
+        return settlementClient.runItems(runId);
+    }
+
+    @GetMapping("/orders")
+    public List<Order> orders(@RequestParam(defaultValue = "0") int page) {
+        if (page < 0 || page > 10_000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid page");
+        }
+        return paymentClient.orders(page);
+    }
+
+    @GetMapping("/orders/{paymentId}")
+    public Order order(@PathVariable UUID paymentId) {
+        return paymentClient.order(paymentId);
+    }
+
     @PostMapping("/settlement/refunds")
-    public Map<String, Object> settlementRefund(
-            @RequestBody Map<String, Object> refundRequest) {
+    public RefundResult settlementRefund(
+            @jakarta.validation.Valid @RequestBody RefundRequest refundRequest) {
         // Idempotency-Key minted by the UI per refund attempt —
         // same pattern as checkout, retries reuse it.
         return settlementClient.refund(refundRequest);
     }
 
         @GetMapping("/ledger/accounts")
-    public List<Map<String, Object>> ledgerAccounts() {
+    public List<LedgerAccount> ledgerAccounts() {
         return ledgerClient.accounts();
     }
 
     @GetMapping("/ledger/accounts/{accountRef}/entries")
-    public List<Map<String, Object>> ledgerAccountEntries(
+    public List<LedgerEntryRow> ledgerAccountEntries(
             @PathVariable String accountRef) {
         return ledgerClient.accountEntries(accountRef);
     }
 
     @GetMapping("/ledger/transactions/{reference:.+}")
-    public Map<String, Object> ledgerJournal(
+    public LedgerJournal ledgerJournal(
             @PathVariable String reference) {
         return ledgerClient.journal(reference);
     }

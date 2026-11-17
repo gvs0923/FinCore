@@ -31,6 +31,7 @@ public class SettlementBatchService {
             String currency,
             LocalDate settlementDate) {
         validateScope(merchantId, currency, settlementDate);
+        SettlementLocks.merchant(jdbc, merchantId);
 
         jdbc.update("""
                 INSERT INTO settlement_batches (
@@ -244,6 +245,7 @@ public class SettlementBatchService {
 
     @Transactional
     public BatchResponse payout(UUID batchId) {
+        SettlementLocks.batch(jdbc, batchId);
         List<Object[]> rows = jdbc.query("""
                 SELECT status, merchant_id, currency,
                        settlement_date, gross_minor, fees_minor,
@@ -287,9 +289,9 @@ public class SettlementBatchService {
         String payload = """
                 {"schemaVersion":1,"batchId":"%s","reference":"settlement:%s",\
                 "merchantId":"%s","currency":"%s","grossMinor":%d,\
-                "feesMinor":%d,"netMinor":%d}"""
+                "feesMinor":%d,"refundsMinor":%d,"netMinor":%d}"""
                 .formatted(batchId, batchId, b[1], b[2],
-                        (long) b[4], (long) b[5], net);
+                        (long) b[4], (long) b[5], (long) b[6], net);
 
         jdbc.update("""
                 INSERT INTO settlement_outbox_events

@@ -36,6 +36,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/settlement/refunds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["settlementRefund"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/settlement/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settlementBatches"];
+        put?: never;
+        post: operations["createSettlementBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/settlement/batches/{batchId}/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["settlementReconcile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/settlement/batches/{batchId}/payout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["settlementPayout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/risk/{paymentId}/resolve": {
         parameters: {
             query?: never;
@@ -84,6 +148,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/settlement/reconciliation-runs/{runId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reconciliationItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/settlement/batches/{batchId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settlementBatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/settlement/batches/{batchId}/reconciliation-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["reconciliationRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/settlement/batches/{batchId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settlementBatchItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/risk/queue": {
         parameters: {
             query?: never;
@@ -116,6 +244,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["orders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orders/{paymentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["order"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/metrics/timeseries": {
         parameters: {
             query?: never;
@@ -124,6 +284,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["timeseries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ledger/transactions/{reference}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ledgerJournal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ledger/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ledgerAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ledger/accounts/{accountRef}/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ledgerAccountEntries"];
         put?: never;
         post?: never;
         delete?: never;
@@ -178,9 +386,99 @@ export interface components {
                 [key: string]: string;
             };
         };
+        RefundRequest: {
+            /** Format: uuid */
+            paymentId: string;
+            idempotencyKey: string;
+            reason: string;
+        };
+        RefundResult: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            paymentId?: string;
+            /** Format: int64 */
+            amountMinor?: number;
+            currency?: string;
+            status?: string;
+            replayed?: boolean;
+        };
+        SettlementBatch: {
+            /** Format: uuid */
+            id?: string;
+            merchantId?: string;
+            currency?: string;
+            /** Format: date */
+            settlementDate?: string;
+            status?: string;
+            /** Format: int64 */
+            captureCount?: number;
+            /** Format: int64 */
+            grossMinor?: number;
+            /** Format: int64 */
+            feesMinor?: number;
+            /** Format: int64 */
+            refundsMinor?: number;
+            /** Format: int64 */
+            netMinor?: number;
+        };
+        ProcessorReport: {
+            reportRef?: string;
+            rows?: components["schemas"]["ProcessorRow"][];
+        };
+        ProcessorRow: {
+            processorRef?: string;
+            currency?: string;
+            /** Format: int64 */
+            amountMinor?: number;
+            /** Format: int64 */
+            feeMinor?: number;
+        };
+        ReconciliationRun: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            batchId?: string;
+            reportRef?: string;
+            /** Format: int32 */
+            itemCount?: number;
+            /** Format: int32 */
+            matchedCount?: number;
+            /** Format: int32 */
+            mismatchedCount?: number;
+            /** Format: int32 */
+            missingInternalCount?: number;
+            /** Format: int32 */
+            missingExternalCount?: number;
+            breakDetected?: boolean;
+        };
         SseEmitter: {
             /** Format: int64 */
             timeout?: number;
+        };
+        ReconciliationItem: {
+            processorRef?: string;
+            classification?: string;
+            /** Format: int64 */
+            internalAmountMinor?: number;
+            /** Format: int64 */
+            internalFeeMinor?: number;
+            internalCurrency?: string;
+            /** Format: int64 */
+            externalAmountMinor?: number;
+            /** Format: int64 */
+            externalFeeMinor?: number;
+            externalCurrency?: string;
+        };
+        BatchItem: {
+            /** Format: uuid */
+            paymentId?: string;
+            processorRef?: string;
+            /** Format: int64 */
+            amountMinor?: number;
+            /** Format: int64 */
+            feeMinor?: number;
+            feePolicyVersion?: string;
         };
         ReviewItem: {
             payment_id: string;
@@ -227,6 +525,47 @@ export interface components {
             score_bucket: string;
             /** Format: int64 */
             count: number;
+        };
+        Order: {
+            /** Format: uuid */
+            id?: string;
+            merchantRef?: string;
+            /** Format: int64 */
+            amount?: number;
+            currency?: string;
+            status?: string;
+            declineReason?: string;
+            cardBrand?: string;
+            cardLast4?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        LedgerEntryRow: {
+            /** Format: uuid */
+            entryId?: string;
+            /** Format: uuid */
+            transactionId?: string;
+            reference?: string;
+            entryType?: string;
+            amount?: number;
+            currency?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        LedgerJournal: {
+            /** Format: uuid */
+            transactionId?: string;
+            reference?: string;
+            description?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            entries?: components["schemas"]["LedgerEntryRow"][];
+        };
+        LedgerAccount: {
+            accountRef?: string;
+            accountType?: string;
+            currency?: string;
+            balance?: number;
         };
     };
     responses: never;
@@ -283,6 +622,125 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SessionResponse"];
+                };
+            };
+        };
+    };
+    settlementRefund: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RefundResult"];
+                };
+            };
+        };
+    };
+    settlementBatches: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SettlementBatch"][];
+                };
+            };
+        };
+    };
+    createSettlementBatch: {
+        parameters: {
+            query: {
+                merchantId: string;
+                currency: string;
+                settlementDate: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SettlementBatch"];
+                };
+            };
+        };
+    };
+    settlementReconcile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessorReport"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReconciliationRun"];
+                };
+            };
+        };
+    };
+    settlementPayout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SettlementBatch"];
                 };
             };
         };
@@ -357,6 +815,97 @@ export interface operations {
             };
         };
     };
+    reconciliationItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReconciliationItem"][];
+                };
+            };
+        };
+    };
+    settlementBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SettlementBatch"];
+                };
+            };
+        };
+    };
+    reconciliationRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ReconciliationRun"][];
+                };
+            };
+        };
+    };
+    settlementBatchItems: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BatchItem"][];
+                };
+            };
+        };
+    };
     riskQueue: {
         parameters: {
             query?: never;
@@ -397,6 +946,50 @@ export interface operations {
             };
         };
     };
+    orders: {
+        parameters: {
+            query?: {
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Order"][];
+                };
+            };
+        };
+    };
+    order: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Order"];
+                };
+            };
+        };
+    };
     timeseries: {
         parameters: {
             query: {
@@ -420,6 +1013,70 @@ export interface operations {
                     "*/*": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    ledgerJournal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reference: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LedgerJournal"];
+                };
+            };
+        };
+    };
+    ledgerAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LedgerAccount"][];
+                };
+            };
+        };
+    };
+    ledgerAccountEntries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountRef: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LedgerEntryRow"][];
                 };
             };
         };

@@ -172,3 +172,103 @@ export function resolveReview(paymentId: string, action: "approve" | "reject") {
     { method: "POST" },
   );
 }
+
+// ---------- Settlement & reconciliation ----------
+
+export type SettlementBatch = Required<components["schemas"]["SettlementBatch"]>; // "2026-01-10"
+
+export type BatchItem = Required<components["schemas"]["BatchItem"]>;
+
+export type ReconciliationRun = Required<components["schemas"]["ReconciliationRun"]>;
+
+export type ReconciliationItem = components["schemas"]["ReconciliationItem"];
+
+export type RefundResult = Required<components["schemas"]["RefundResult"]>;
+
+export function fetchBatches(limit = 50, offset = 0) {
+  return adminRequest<SettlementBatch[]>(
+    `/v1/admin/settlement/batches?limit=${limit}&offset=${offset}`);
+}
+
+export function fetchBatch(batchId: string) {
+  return adminRequest<SettlementBatch>(
+    `/v1/admin/settlement/batches/${batchId}`);
+}
+
+export function fetchBatchItems(batchId: string) {
+  return adminRequest<BatchItem[]>(
+    `/v1/admin/settlement/batches/${batchId}/items`);
+}
+
+export function createBatch(
+  merchantId: string, currency: string, settlementDate: string) {
+  const p = new URLSearchParams({ merchantId, currency, settlementDate });
+  return adminRequest<SettlementBatch>(
+    `/v1/admin/settlement/batches?${p}`, { method: "POST" });
+}
+
+export function payoutBatch(batchId: string) {
+  return adminRequest<SettlementBatch>(
+    `/v1/admin/settlement/batches/${batchId}/payout`,
+    { method: "POST" });
+}
+
+export function importReport(
+  batchId: string, reportRef: string,
+  rows: { processorRef: string; currency: string;
+          amountMinor: number; feeMinor: number }[]) {
+  return adminRequest<ReconciliationRun>(
+    `/v1/admin/settlement/batches/${batchId}/reconciliation`,
+    { method: "POST", body: JSON.stringify({ reportRef, rows }) });
+}
+
+export function fetchReconRuns(batchId: string) {
+  return adminRequest<ReconciliationRun[]>(
+    `/v1/admin/settlement/batches/${batchId}/reconciliation-runs`);
+}
+
+export function fetchReconItems(runId: string) {
+  return adminRequest<ReconciliationItem[]>(
+    `/v1/admin/settlement/reconciliation-runs/${runId}/items`);
+}
+
+export function refundPayment(
+  paymentId: string, idempotencyKey: string,
+  reason: string) {
+  return adminRequest<RefundResult>("/v1/admin/settlement/refunds", {
+    method: "POST",
+    body: JSON.stringify({ paymentId, idempotencyKey, reason }),
+  });
+}
+
+// ---------- Ledger explorer ----------
+
+export type LedgerAccount = Required<components["schemas"]["LedgerAccount"]>; // BigDecimal arrives as JSON string/number
+
+export type LedgerEntryRow = Required<components["schemas"]["LedgerEntryRow"]>;
+
+export type LedgerJournal = Omit<Required<components["schemas"]["LedgerJournal"]>, "entries"> & { entries: LedgerEntryRow[] };
+
+export type Order = Required<components["schemas"]["Order"]>;
+
+export function fetchOrders(page = 0) {
+  return adminRequest<Order[]>(`/v1/admin/orders?page=${page}`);
+}
+
+export function fetchOrder(paymentId: string) {
+  return adminRequest<Order>(`/v1/admin/orders/${encodeURIComponent(paymentId)}`);
+}
+
+export function fetchLedgerAccounts() {
+  return adminRequest<LedgerAccount[]>("/v1/admin/ledger/accounts");
+}
+
+export function fetchAccountEntries(accountRef: string) {
+  return adminRequest<LedgerEntryRow[]>(
+    `/v1/admin/ledger/accounts/${encodeURIComponent(accountRef)}/entries`);
+}
+
+export function fetchJournal(reference: string) {
+  return adminRequest<LedgerJournal>(
+    `/v1/admin/ledger/transactions/${encodeURIComponent(reference)}`);
+}
