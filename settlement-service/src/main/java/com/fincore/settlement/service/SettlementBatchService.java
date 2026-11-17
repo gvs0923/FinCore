@@ -242,7 +242,7 @@ public class SettlementBatchService {
                 offset);
     }
 
-        @Transactional
+    @Transactional
     public BatchResponse payout(UUID batchId) {
         List<Object[]> rows = jdbc.query("""
                 SELECT status, merchant_id, currency,
@@ -307,6 +307,36 @@ public class SettlementBatchService {
 
         return get(batchId);
     }
+
+    @Transactional(readOnly = true)
+    public List<BatchResponse> list(int limit, long offset) {
+        if (limit < 1 || limit > 100 || offset < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "limit 1-100, offset >= 0");
+        }
+        return jdbc.query("""
+                SELECT id, merchant_id, currency, settlement_date,
+                       status, capture_count, gross_minor, fees_minor,
+                       refunds_minor, net_minor
+                FROM settlement_batches
+                ORDER BY settlement_date DESC, id
+                LIMIT ? OFFSET ?
+                """,
+                (rs, n) -> new BatchResponse(
+                        rs.getObject("id", UUID.class),
+                        rs.getString("merchant_id"),
+                        rs.getString("currency"),
+                        rs.getDate("settlement_date").toLocalDate(),
+                        rs.getString("status"),
+                        rs.getLong("capture_count"),
+                        rs.getLong("gross_minor"),
+                        rs.getLong("fees_minor"),
+                        rs.getLong("refunds_minor"),
+                        rs.getLong("net_minor")),
+                limit, offset);
+    }
+
+    
 
     private static void validateScope(
             String merchantId,

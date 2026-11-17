@@ -1,6 +1,7 @@
 package com.fincore.settlement.service;
 
 import com.fincore.settlement.reconciliation.ReconciliationEngine;
+import com.fincore.settlement.reconciliation.ReconciliationModels;
 import com.fincore.settlement.reconciliation.ReconciliationModels.Classification;
 import com.fincore.settlement.reconciliation.ReconciliationModels.Comparison;
 import com.fincore.settlement.reconciliation.ReconciliationModels.RunResponse;
@@ -158,5 +159,53 @@ public class ReconciliationService {
         return new RunResponse(runId, batchId, reportRef,
                 comparisons.size(), matched, mismatched,
                 missingInternal, missingExternal, breakDetected);
+    }
+
+        @Transactional(readOnly = true)
+    public List<RunResponse> runsForBatch(UUID batchId) {
+        return jdbc.query("""
+                SELECT id, batch_id, report_ref, item_count,
+                       matched_count, mismatched_count,
+                       missing_internal_count, missing_external_count,
+                       break_detected
+                FROM reconciliation_runs
+                WHERE batch_id = ?
+                ORDER BY created_at DESC
+                """,
+                (rs, n) -> new RunResponse(
+                        rs.getObject("id", UUID.class),
+                        rs.getObject("batch_id", UUID.class),
+                        rs.getString("report_ref"),
+                        rs.getInt("item_count"),
+                        rs.getInt("matched_count"),
+                        rs.getInt("mismatched_count"),
+                        rs.getInt("missing_internal_count"),
+                        rs.getInt("missing_external_count"),
+                        rs.getBoolean("break_detected")),
+                batchId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ReconciliationModels.ItemResponse> runItems(UUID runId) {
+        return jdbc.query("""
+                SELECT processor_ref, classification,
+                       internal_amount_minor, internal_fee_minor,
+                       internal_currency,
+                       external_amount_minor, external_fee_minor,
+                       external_currency
+                FROM reconciliation_items
+                WHERE run_id = ?
+                ORDER BY processor_ref
+                """,
+                (rs, n) -> new ReconciliationModels.ItemResponse(
+                        rs.getString("processor_ref"),
+                        rs.getString("classification"),
+                        rs.getObject("internal_amount_minor", Long.class),
+                        rs.getObject("internal_fee_minor", Long.class),
+                        rs.getString("internal_currency"),
+                        rs.getObject("external_amount_minor", Long.class),
+                        rs.getObject("external_fee_minor", Long.class),
+                        rs.getString("external_currency")),
+                runId);
     }
 }

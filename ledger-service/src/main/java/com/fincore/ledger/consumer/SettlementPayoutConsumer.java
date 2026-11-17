@@ -1,6 +1,7 @@
 package com.fincore.ledger.consumer;
 
 import com.fincore.ledger.domain.EntryType;
+import com.fincore.ledger.service.DuplicatePostingException;
 import com.fincore.ledger.service.JournalLine;
 import com.fincore.ledger.service.LedgerService;
 import org.slf4j.Logger;
@@ -52,9 +53,9 @@ public class SettlementPayoutConsumer {
                             "LIABILITY:MERCHANT_PAYOUT", net)));
 
             log.info("Payout posted for reference {}", reference);
-        } catch (IllegalStateException e) {
+        } catch (DuplicatePostingException e) {
             // Duplicate delivery — ledger already has this reference.
-            log.info("Duplicate payout event: {}", e.getMessage());
+            log.info("Duplicate event, already posted: {}", e.getMessage());
         } catch (Exception e) {
             throw new RuntimeException(e); // retry → DLT
         }

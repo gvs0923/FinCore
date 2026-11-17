@@ -1,5 +1,6 @@
 package com.fincore.ledger.consumer;
 
+import com.fincore.ledger.service.DuplicatePostingException;
 import com.fincore.ledger.service.JournalLine;
 import com.fincore.ledger.service.LedgerService;
 import org.slf4j.Logger;
@@ -46,8 +47,8 @@ public class PaymentRefundedConsumer {
                                     "ASSET:PROCESSOR_CLEARING", amount)));
 
             log.info("Refund posted for reference {}", reference);
-        } catch (IllegalStateException e) {
-            log.info("Duplicate refund event: {}", e.getMessage());
+        } catch (DuplicatePostingException e) {
+            log.info("Duplicate event, already posted: {}", e.getMessage());
         } catch (Exception e) {
             throw new RuntimeException(e); // retry → DLT
         }

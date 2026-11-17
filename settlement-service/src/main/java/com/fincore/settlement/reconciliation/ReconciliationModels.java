@@ -15,6 +15,18 @@ public final class ReconciliationModels {
         MISSING_EXTERNAL
     }
 
+        // A single persisted comparison row — both sides' evidence.
+    public record ItemResponse(
+            String processorRef,
+            String classification,
+            Long internalAmountMinor,
+            Long internalFeeMinor,
+            String internalCurrency,
+            Long externalAmountMinor,
+            Long externalFeeMinor,
+            String externalCurrency) {
+    }
+
     public record SettlementRow(
             String processorRef,
             String currency,

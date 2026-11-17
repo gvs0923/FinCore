@@ -4,11 +4,13 @@ import com.fincore.checkout.client.LedgerAdminClient;
 import com.fincore.checkout.client.MetricsClient;
 import com.fincore.checkout.client.PaymentClient;
 import com.fincore.checkout.client.RiskAdminClient;
+import com.fincore.checkout.client.SettlementClient;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,15 +45,18 @@ public class AdminController {
     private final LedgerAdminClient ledgerClient;
     private final RiskAdminClient riskAdminClient;
     private final PaymentClient paymentClient;
+    private final SettlementClient settlementClient;
 
     public AdminController(MetricsClient metricsClient,
                            LedgerAdminClient ledgerClient,
                            RiskAdminClient riskAdminClient,
-                           PaymentClient paymentClient) {
+                           PaymentClient paymentClient,
+                           SettlementClient settlementClient) {
         this.metricsClient = metricsClient;
         this.ledgerClient = ledgerClient;
         this.riskAdminClient = riskAdminClient;
         this.paymentClient = paymentClient;
+        this.settlementClient = settlementClient;
     }
 
     @GetMapping("/overview")
@@ -178,4 +183,78 @@ public class AdminController {
         log.warn("Risk review resolution marker could not be updated");
     }
     }
+
+    @GetMapping("/settlement/batches")
+    public List<Map<String, Object>> settlementBatches(
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") long offset) {
+        return settlementClient.listBatches(limit, offset);
+    }
+
+     @PostMapping("/settlement/batches")
+    public Map<String, Object> createSettlementBatch(
+            @RequestParam String merchantId,
+            @RequestParam String currency,
+            @RequestParam String settlementDate) {
+        return settlementClient.createBatch(
+                merchantId, currency, settlementDate);
+    }
+ 
+    @GetMapping("/settlement/batches/{batchId}")
+    public Map<String, Object> settlementBatch(
+            @PathVariable UUID batchId) {
+        return settlementClient.getBatch(batchId);
+    }
+ 
+    @GetMapping("/settlement/batches/{batchId}/items")
+    public List<Map<String, Object>> settlementBatchItems(
+            @PathVariable UUID batchId,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") long offset) {
+        if (limit < 1 || limit > 100 || offset < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "limit 1-100, offset >= 0");
+        }
+        return settlementClient.batchItems(batchId, limit, offset);
+    }
+ 
+    @PostMapping("/settlement/batches/{batchId}/payout")
+    public Map<String, Object> settlementPayout(
+            @PathVariable UUID batchId) {
+        return settlementClient.payout(batchId);
+    }
+ 
+    @PostMapping("/settlement/batches/{batchId}/reconciliation")
+    public Map<String, Object> settlementReconcile(
+            @PathVariable UUID batchId,
+            @RequestBody Map<String, Object> report) {
+        return settlementClient.importReport(batchId, report);
+    }
+ 
+    @PostMapping("/settlement/refunds")
+    public Map<String, Object> settlementRefund(
+            @RequestBody Map<String, Object> refundRequest) {
+        // Idempotency-Key minted by the UI per refund attempt —
+        // same pattern as checkout, retries reuse it.
+        return settlementClient.refund(refundRequest);
+    }
+
+        @GetMapping("/ledger/accounts")
+    public List<Map<String, Object>> ledgerAccounts() {
+        return ledgerClient.accounts();
+    }
+
+    @GetMapping("/ledger/accounts/{accountRef}/entries")
+    public List<Map<String, Object>> ledgerAccountEntries(
+            @PathVariable String accountRef) {
+        return ledgerClient.accountEntries(accountRef);
+    }
+
+    @GetMapping("/ledger/transactions/{reference:.+}")
+    public Map<String, Object> ledgerJournal(
+            @PathVariable String reference) {
+        return ledgerClient.journal(reference);
+    }
+
+
 }

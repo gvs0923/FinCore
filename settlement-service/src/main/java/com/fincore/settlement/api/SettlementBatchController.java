@@ -55,5 +55,12 @@ public class SettlementBatchController {
         return batchService.payout(batchId);
     }
 
+    @GetMapping
+    public List<BatchResponse> list(
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") long offset) {
+        return batchService.list(limit, offset);
+    }
+
 
 }
