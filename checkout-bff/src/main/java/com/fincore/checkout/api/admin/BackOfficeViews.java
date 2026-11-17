@@ -11,7 +11,9 @@ public final class BackOfficeViews {
 
     public record SettlementBatch(UUID id, String merchantId, String currency,
             LocalDate settlementDate, String status, long captureCount,
-            long grossMinor, long feesMinor, long refundsMinor, long netMinor) {}
+            long grossMinor, long feesMinor, long refundsMinor, long netMinor, String batchKind,
+            @io.swagger.v3.oas.annotations.media.Schema(nullable = true) UUID originalBatchId,
+            @io.swagger.v3.oas.annotations.media.Schema(nullable = true) UUID adjustmentRefundId) {}
     public record BatchItem(UUID paymentId, String processorRef, long amountMinor,
             long feeMinor, String feePolicyVersion) {}
     public record ReconciliationRun(UUID id, UUID batchId, String reportRef,
@@ -26,7 +28,8 @@ public final class BackOfficeViews {
             @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 255) String idempotencyKey,
             @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(max = 1000) String reason) {}
     public record RefundResult(UUID id, UUID paymentId, long amountMinor,
-            String currency, String status, boolean replayed) {}
+            String currency, String status, boolean replayed,
+            @io.swagger.v3.oas.annotations.media.Schema(nullable = true) UUID adjustmentBatchId) {}
     public record LedgerAccount(String accountRef, String accountType, String currency, BigDecimal balance) {}
     public record LedgerEntryRow(UUID entryId, UUID transactionId, String reference,
             String entryType, BigDecimal amount, String currency, OffsetDateTime createdAt) {}

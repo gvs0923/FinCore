@@ -62,6 +62,43 @@ class SettlementLedgerIT {
         assertJournal("payment:" + paymentId, 2, "200.00");
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void lateRefundRecoveryIsBalancedAndDoesNotRewritePayout(boolean recoveryFirst) {
+        UUID paymentId = UUID.randomUUID(), refundId = UUID.randomUUID();
+        UUID batchId = UUID.randomUUID(), adjustmentId = UUID.randomUUID();
+        captures.onPaymentCaptured("""
+                {"paymentId":"%s","amount":10000,"currency":"USD"}
+                """.formatted(paymentId));
+        String originalPayout = """
+                {"batchId":"%s","reference":"settlement:%s","grossMinor":10000,
+                 "feesMinor":320,"refundsMinor":0,"netMinor":9680,"currency":"USD"}
+                """.formatted(batchId, batchId);
+        String recovery = """
+                {"batchId":"%s","reference":"settlement:%s","grossMinor":0,
+                 "feesMinor":0,"refundsMinor":10000,"netMinor":-10000,
+                 "currency":"USD","batchKind":"REFUND_ADJUSTMENT"}
+                """.formatted(adjustmentId, adjustmentId);
+        if (!recoveryFirst) payouts.onPayout(originalPayout);
+        refunds.onRefunded("""
+                {"paymentId":"%s","reference":"refund:%s","amountMinor":10000,
+                 "currency":"USD","originalRef":"payment:%s"}
+                """.formatted(paymentId, refundId, paymentId));
+        payouts.onPayout(recovery);
+        payouts.onPayout(recovery);
+        payouts.onPayout(originalPayout);
+        assertJournal("payment:" + paymentId, 2, "100.00");
+        assertJournal("refund:" + refundId, 2, "100.00");
+        assertJournal("settlement:" + batchId, 3, "100.00");
+        assertJournal("settlement:" + adjustmentId, 2, "100.00");
+        String account = jdbc.queryForObject("""
+                SELECT a.account_ref FROM ledger_entries e JOIN accounts a ON a.id = e.account_id
+                JOIN ledger_transactions t ON t.id = e.transaction_id
+                WHERE t.reference = ? AND e.entry_type = 'DEBIT'
+                """, String.class, "settlement:" + adjustmentId);
+        assertEquals("LIABILITY:MERCHANT_PAYOUT", account);
+    }
+
     private void assertJournal(String reference, int count, String amount) {
         assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM ledger_transactions WHERE reference = ?", Long.class, reference));
         assertEquals(count, jdbc.queryForObject("""

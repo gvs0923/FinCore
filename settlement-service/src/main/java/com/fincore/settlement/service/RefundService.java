@@ -44,14 +44,10 @@ public class RefundService {
         }
         SettlementLocks.merchant(jdbc, merchants.getFirst());
         var frozen = jdbc.query("""
-                SELECT b.status FROM settlement_batch_items i
+                SELECT b.id FROM settlement_batch_items i
                 JOIN settlement_batches b ON b.id = i.batch_id
                 WHERE i.payment_id = ? AND b.status <> 'OPEN'
-                """, (rs, n) -> rs.getString(1), paymentId);
-        if (!frozen.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Refund requires a settlement adjustment: batch is already frozen");
-        }
+                """, (rs, n) -> rs.getObject(1, UUID.class), paymentId);
 
         // --- Step 2: lock the capture. Two refunds on the same
         // payment serialize here, not on the outbox write.
@@ -137,21 +133,37 @@ public class RefundService {
                 WHERE i.batch_id = b.id AND i.payment_id = ? AND b.status = 'OPEN'
                 """, amount, amount, paymentId);
 
+        UUID adjustmentBatchId = null;
+        if (!frozen.isEmpty()) {
+            adjustmentBatchId = UUID.randomUUID();
+            jdbc.update("""
+                    INSERT INTO settlement_batches (
+                        id, merchant_id, currency, settlement_date, batch_kind,
+                        original_batch_id, adjustment_refund_id, refunds_minor, net_minor)
+                    VALUES (?, ?, ?, ?, 'REFUND_ADJUSTMENT', ?, ?, ?, ?)
+                    """, adjustmentBatchId, merchants.getFirst(), currency,
+                    java.sql.Date.valueOf(java.time.LocalDate.now(java.time.ZoneOffset.UTC)),
+                    frozen.getFirst(), refundId, amount, -amount);
+        }
+
         return new RefundResponse(
-                refundId, paymentId, amount, currency, "REFUNDED", false);
+                refundId, paymentId, amount, currency, "REFUNDED", false, adjustmentBatchId);
     }
 
     private RefundRow findByIdempotencyKey(String key) {
         var rows = jdbc.query("""
-                SELECT id, payment_id, amount_minor, currency, status
-                FROM settlement_refunds
-                WHERE idempotency_key = ?""",
+                SELECT r.id, r.payment_id, r.amount_minor, r.currency, r.status,
+                       b.id AS adjustment_batch_id
+                FROM settlement_refunds r
+                LEFT JOIN settlement_batches b ON b.adjustment_refund_id = r.id
+                WHERE r.idempotency_key = ?""",
                 (rs, rowNum) -> new RefundRow(
                         rs.getObject("id", UUID.class),
                         rs.getObject("payment_id", UUID.class),
                         rs.getLong("amount_minor"),
                         rs.getString("currency"),
-                        rs.getString("status")),
+                        rs.getString("status"),
+                        rs.getObject("adjustment_batch_id", UUID.class)),
                 key);
         return rows.isEmpty() ? null : rows.getFirst();
     }
@@ -160,7 +172,7 @@ public class RefundService {
             RefundRow r, boolean replayed) {
         return new RefundResponse(
                 r.id(), r.paymentId(), r.amountMinor(),
-                r.currency(), r.status(), replayed);
+                r.currency(), r.status(), replayed, r.adjustmentBatchId());
     }
 
     private static void validate(
@@ -178,6 +190,6 @@ public class RefundService {
 
     private record RefundRow(
             UUID id, UUID paymentId, long amountMinor,
-            String currency, String status) {
+            String currency, String status, UUID adjustmentBatchId) {
     }
 }

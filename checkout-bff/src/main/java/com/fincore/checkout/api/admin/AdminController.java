@@ -219,6 +219,16 @@ public class AdminController {
         return settlementClient.batchItems(batchId, limit, offset);
     }
  
+    @GetMapping("/settlement/batches/{batchId}/adjustments")
+    public List<SettlementBatch> settlementAdjustments(@PathVariable UUID batchId,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") long offset) {
+        if (limit < 1 || limit > 100 || offset < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit 1-100, offset >= 0");
+        }
+        return settlementClient.adjustments(batchId, limit, offset);
+    }
+
     @PostMapping("/settlement/batches/{batchId}/payout")
     public SettlementBatch settlementPayout(
             @PathVariable UUID batchId) {

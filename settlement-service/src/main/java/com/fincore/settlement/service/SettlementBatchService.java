@@ -20,9 +20,11 @@ import java.util.UUID;
 public class SettlementBatchService {
 
     private final JdbcTemplate jdbc;
+    private final tools.jackson.databind.ObjectMapper objectMapper;
 
-    public SettlementBatchService(JdbcTemplate jdbc) {
+    public SettlementBatchService(JdbcTemplate jdbc, tools.jackson.databind.ObjectMapper objectMapper) {
         this.jdbc = jdbc;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -45,7 +47,7 @@ public class SettlementBatchService {
                     merchant_id,
                     currency,
                     settlement_date
-                ) DO NOTHING
+                ) WHERE batch_kind = 'DAILY' DO NOTHING
                 """,
                 UUID.randomUUID(),
                 merchantId,
@@ -58,6 +60,7 @@ public class SettlementBatchService {
                 WHERE merchant_id = ?
                   AND currency = ?
                   AND settlement_date = ?
+                  AND batch_kind = 'DAILY'
                 FOR UPDATE
                 """,
                 (rs, rowNum) -> new BatchResponse(
@@ -70,7 +73,10 @@ public class SettlementBatchService {
                         rs.getLong("gross_minor"),
                         rs.getLong("fees_minor"),
                         rs.getLong("refunds_minor"),
-                        rs.getLong("net_minor")),
+                        rs.getLong("net_minor"),
+                        rs.getString("batch_kind"),
+                        rs.getObject("original_batch_id", UUID.class),
+                        rs.getObject("adjustment_refund_id", UUID.class)),
                 merchantId,
                 currency,
                 Date.valueOf(settlementDate));
@@ -195,7 +201,10 @@ public class SettlementBatchService {
                         rs.getLong("gross_minor"),
                         rs.getLong("fees_minor"),
                         rs.getLong("refunds_minor"),
-                        rs.getLong("net_minor")),
+                        rs.getLong("net_minor"),
+                        rs.getString("batch_kind"),
+                        rs.getObject("original_batch_id", UUID.class),
+                        rs.getObject("adjustment_refund_id", UUID.class)),
                 batchId);
 
         if (batches.isEmpty()) {
@@ -218,7 +227,15 @@ public class SettlementBatchService {
                     "Limit must be 1–100 and offset must be non-negative");
         }
 
-        get(batchId);
+        BatchResponse batch = get(batchId);
+        if ("REFUND_ADJUSTMENT".equals(batch.batchKind())) {
+            if (offset > 0) return List.of();
+            return jdbc.query("""
+                    SELECT payment_id, id, amount_minor FROM settlement_refunds WHERE id = ?
+                    """, (rs, n) -> new BatchItemResponse(rs.getObject("payment_id", UUID.class),
+                    "refund:" + rs.getObject("id", UUID.class), -rs.getLong("amount_minor"), 0,
+                    "REFUND_ADJUSTMENT"), batch.adjustmentRefundId());
+        }
 
         return jdbc.query("""
                 SELECT
@@ -249,7 +266,7 @@ public class SettlementBatchService {
         List<Object[]> rows = jdbc.query("""
                 SELECT status, merchant_id, currency,
                        settlement_date, gross_minor, fees_minor,
-                       refunds_minor, net_minor
+                       refunds_minor, net_minor, batch_kind
                 FROM settlement_batches
                 WHERE id = ?
                 FOR UPDATE
@@ -262,7 +279,8 @@ public class SettlementBatchService {
                         rs.getLong("gross_minor"),
                         rs.getLong("fees_minor"),
                         rs.getLong("refunds_minor"),
-                        rs.getLong("net_minor")},
+                        rs.getLong("net_minor"),
+                        rs.getString("batch_kind")},
                 batchId);
 
         if (rows.isEmpty()) {
@@ -278,7 +296,8 @@ public class SettlementBatchService {
         }
 
         long net = (long) b[7];
-        if (net <= 0) {
+        boolean adjustment = "REFUND_ADJUSTMENT".equals(b[8]);
+        if (adjustment ? net >= 0 : net <= 0) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Batch has no positive payout (net=" + net + ")");
@@ -286,12 +305,10 @@ public class SettlementBatchService {
 
         // Ledger posting is idempotent by this reference — a Kafka
         // redelivery of the same payout event is rejected there.
-        String payload = """
-                {"schemaVersion":1,"batchId":"%s","reference":"settlement:%s",\
-                "merchantId":"%s","currency":"%s","grossMinor":%d,\
-                "feesMinor":%d,"refundsMinor":%d,"netMinor":%d}"""
-                .formatted(batchId, batchId, b[1], b[2],
-                        (long) b[4], (long) b[5], (long) b[6], net);
+        String payload = objectMapper.writeValueAsString(java.util.Map.of(
+                "schemaVersion", 2, "batchId", batchId, "reference", "settlement:" + batchId,
+                "merchantId", b[1], "currency", b[2], "grossMinor", b[4],
+                "feesMinor", b[5], "refundsMinor", b[6], "netMinor", net, "batchKind", b[8]));
 
         jdbc.update("""
                 INSERT INTO settlement_outbox_events
@@ -301,11 +318,11 @@ public class SettlementBatchService {
 
         jdbc.update("""
                 UPDATE settlement_batches
-                SET status = 'PAID_OUT',
+                SET status = ?,
                     paid_out_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
-                """, batchId);
+                """, adjustment ? "RECOVERED" : "PAID_OUT", batchId);
 
         return get(batchId);
     }
@@ -319,7 +336,8 @@ public class SettlementBatchService {
         return jdbc.query("""
                 SELECT id, merchant_id, currency, settlement_date,
                        status, capture_count, gross_minor, fees_minor,
-                       refunds_minor, net_minor
+                       refunds_minor, net_minor, batch_kind,
+                       original_batch_id, adjustment_refund_id
                 FROM settlement_batches
                 ORDER BY settlement_date DESC, id
                 LIMIT ? OFFSET ?
@@ -334,11 +352,32 @@ public class SettlementBatchService {
                         rs.getLong("gross_minor"),
                         rs.getLong("fees_minor"),
                         rs.getLong("refunds_minor"),
-                        rs.getLong("net_minor")),
+                        rs.getLong("net_minor"),
+                        rs.getString("batch_kind"),
+                        rs.getObject("original_batch_id", UUID.class),
+                        rs.getObject("adjustment_refund_id", UUID.class)),
                 limit, offset);
     }
 
     
+
+    @Transactional(readOnly = true)
+    public List<BatchResponse> adjustments(UUID originalBatchId, int limit, long offset) {
+        if (limit < 1 || limit > 100 || offset < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit 1-100, offset >= 0");
+        }
+        get(originalBatchId);
+        return jdbc.query("""
+                SELECT * FROM settlement_batches WHERE original_batch_id = ?
+                ORDER BY created_at DESC, id LIMIT ? OFFSET ?
+                """, (rs, n) -> new BatchResponse(rs.getObject("id", UUID.class),
+                rs.getString("merchant_id"), rs.getString("currency"),
+                rs.getDate("settlement_date").toLocalDate(), rs.getString("status"),
+                rs.getLong("capture_count"), rs.getLong("gross_minor"), rs.getLong("fees_minor"),
+                rs.getLong("refunds_minor"), rs.getLong("net_minor"), rs.getString("batch_kind"),
+                rs.getObject("original_batch_id", UUID.class), rs.getObject("adjustment_refund_id", UUID.class)),
+                originalBatchId, limit, offset);
+    }
 
     private static void validateScope(
             String merchantId,

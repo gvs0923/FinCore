@@ -36,7 +36,7 @@ public class ReconciliationService {
         if (reportRef == null || reportRef.isBlank() || reportRef.length() > 255
                 || externalRows == null || externalRows.size() > 10_000
                 || externalRows.stream().anyMatch(r -> r == null || r.processorRef() == null
-                    || r.processorRef().isBlank() || r.amountMinor() < 0 || r.feeMinor() < 0)) {
+                    || r.processorRef().isBlank() || r.feeMinor() < 0)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid processor report");
         }
         SettlementLocks.batch(jdbc, batchId);
@@ -44,14 +44,14 @@ public class ReconciliationService {
         // Step 1: lock the batch row — nothing can refresh its items
         // while this transaction runs.
         var batch = jdbc.query("""
-                SELECT status, currency
+                SELECT status, currency, batch_kind
                 FROM settlement_batches
                 WHERE id = ?
                 FOR UPDATE
                 """,
                 (rs, rowNum) -> new String[]{
                         rs.getString("status"),
-                        rs.getString("currency")},
+                        rs.getString("currency"), rs.getString("batch_kind")},
                 batchId);
 
         if (batch.isEmpty()) {
@@ -65,12 +65,20 @@ public class ReconciliationService {
                     "Batch is already reconciled or paid out");
         }
         String batchCurrency = batch.getFirst()[1];
+        if ("DAILY".equals(batch.getFirst()[2]) && externalRows.stream().anyMatch(r -> r.amountMinor() < 0)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Daily reports require non-negative capture amounts");
+        }
 
         // Step 2: internal side = persisted batch items.
         List<SettlementRow> internalRows = jdbc.query("""
                 SELECT processor_ref, amount_minor, fee_minor
                 FROM settlement_batch_items
                 WHERE batch_id = ?
+                UNION ALL
+                SELECT 'refund:' || r.id, -r.amount_minor, 0::BIGINT
+                FROM settlement_batches b
+                JOIN settlement_refunds r ON r.id = b.adjustment_refund_id
+                WHERE b.id = ?
                 ORDER BY processor_ref
                 """,
                 (rs, rowNum) -> new SettlementRow(
@@ -78,7 +86,7 @@ public class ReconciliationService {
                         batchCurrency,
                         rs.getLong("amount_minor"),
                         rs.getLong("fee_minor")),
-                batchId);
+                batchId, batchId);
 
         // Step 3: the report must declare only this batch's currency.
         boolean foreignCurrency = externalRows.stream()

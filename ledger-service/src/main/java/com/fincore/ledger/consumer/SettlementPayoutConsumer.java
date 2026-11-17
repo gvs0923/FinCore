@@ -43,6 +43,18 @@ public class SettlementPayoutConsumer {
             BigDecimal refunds = e.has("refundsMinor")
                     ? BigDecimal.valueOf(e.get("refundsMinor").asLong(), 2)
                     : gross.subtract(fees).subtract(net);
+            boolean adjustment = e.has("batchKind") && "REFUND_ADJUSTMENT".equals(e.get("batchKind").asString());
+            if (adjustment) {
+                if (gross.signum() != 0 || fees.signum() != 0 || refunds.signum() <= 0
+                        || net.compareTo(refunds.negate()) != 0) {
+                    throw new IllegalArgumentException("Invalid refund adjustment totals");
+                }
+                ledgerService.postTransaction(reference,
+                        "Simulated refund recovery " + e.get("batchId").asString(), List.of(
+                                JournalLine.debit("LIABILITY:MERCHANT_PAYOUT", refunds),
+                                JournalLine.credit("LIABILITY:MERCHANT_RECEIVABLE", refunds)));
+                return;
+            }
             if (refunds.signum() < 0 || net.signum() <= 0
                     || gross.subtract(refunds).compareTo(fees.add(net)) != 0) {
                 throw new IllegalArgumentException("Invalid payout totals");

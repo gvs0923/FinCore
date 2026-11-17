@@ -44,7 +44,8 @@ test("admin refunds a captured order with one audited reversing journal", async 
   expect(sql(`SELECT count(*) FROM ledger_transactions WHERE reference='payment:${paymentId}'`)).toBe("1");
 });
 
-test("admin imports CSV, reads a reconciliation report and pays out a refunded batch", async ({ page, context, request }) => {
+for (const originalStatus of ["RECONCILED", "PAID_OUT"]) {
+test(`admin reconciles and recovers a late refund against a ${originalStatus} batch`, async ({ page, context, request }) => {
   test.setTimeout(90_000);
   const merchantId = `e2e-settlement-${randomUUID()}`;
   const first = randomUUID(), second = randomUUID();
@@ -74,12 +75,40 @@ test("admin imports CSV, reads a reconciliation report and pays out a refunded b
   await expect(page.getByRole("heading", { name: "Reconciliation report" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "MATCHED", exact: true })).toHaveCount(2);
   await page.goto(`/admin/settlement/${batch.id}`);
-  await page.getByRole("button", { name: "Pay out", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("PAID_OUT");
+  if (originalStatus === "PAID_OUT") {
+    await page.getByRole("button", { name: "Pay out", exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("PAID_OUT");
+  }
+  const original = await (await request.get(`/v1/admin/settlement/batches/${batch.id}`, { headers })).json();
+  const key = randomUUID();
+  const refundRequest = { paymentId: second, idempotencyKey: key, reason: "E2E frozen refund" };
+  const frozen = await request.post("/v1/admin/settlement/refunds", { headers, data: refundRequest });
+  expect(frozen.ok()).toBe(true);
+  const refund = await frozen.json();
+  expect(refund.adjustmentBatchId).toMatch(/^[0-9a-f-]{36}$/i);
+  const replay = await (await request.post("/v1/admin/settlement/refunds", { headers, data: refundRequest })).json();
+  expect(replay.adjustmentBatchId).toBe(refund.adjustmentBatchId);
+  expect(replay.replayed).toBe(true);
+  await page.reload();
+  const adjustmentLink = page.getByRole("link", { name: `Adjustment ${refund.adjustmentBatchId}` });
+  await expect(adjustmentLink).toBeVisible();
+  await adjustmentLink.click();
+  await expect(page.getByRole("link", { name: "Original settlement batch" })).toHaveAttribute("href", `/admin/settlement/${batch.id}`);
+  await page.getByRole("textbox", { name: "Report reference" }).fill(`e2e-adjustment-${refund.id}`);
+  await page.getByRole("textbox", { name: "Processor CSV" }).fill(`processorRef,currency,amountMinor,feeMinor\nrefund:${refund.id},USD,-10000,0\n`);
+  await page.getByRole("button", { name: "Import processor report" }).click();
+  await expect(page.getByRole("button", { name: "Simulate recovery" })).toBeEnabled();
+  await page.getByRole("button", { name: "Simulate recovery" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("RECOVERED");
+  await expect.poll(() => sql(`SELECT count(*) FROM ledger_transactions WHERE reference='settlement:${refund.adjustmentBatchId}'`), { timeout: 15000 }).toBe("1");
+  expect(sql(`SELECT sum(CASE WHEN e.entry_type='DEBIT' THEN e.amount ELSE -e.amount END) FROM ledger_entries e JOIN ledger_transactions t ON t.id=e.transaction_id WHERE t.reference='settlement:${refund.adjustmentBatchId}'`)).toBe("0.0000");
+  expect((await request.post(`/v1/admin/settlement/batches/${refund.adjustmentBatchId}/payout`, { headers })).status()).toBe(409);
+  expect(await (await request.get(`/v1/admin/settlement/batches/${batch.id}`, { headers })).json()).toEqual(original);
+  if (originalStatus === "RECONCILED") {
+    expect((await request.post(`/v1/admin/settlement/batches/${batch.id}/payout`, { headers })).ok()).toBe(true);
+  }
   await expect.poll(() => sql(`SELECT count(*) FROM ledger_transactions WHERE reference='settlement:${batch.id}'`), { timeout: 15000 }).toBe("1");
   expect(sql(`SELECT sum(CASE WHEN e.entry_type='DEBIT' THEN e.amount ELSE -e.amount END) FROM ledger_entries e JOIN ledger_transactions t ON t.id=e.transaction_id WHERE t.reference='settlement:${batch.id}'`)).toBe("0.0000");
-  expect(sql(`SELECT actor FROM refund_audit_events WHERE payment_id='${first}'`)).toBe("local-admin");
-  const frozen = await request.post("/v1/admin/settlement/refunds", { headers,
-    data: { paymentId: second, idempotencyKey: randomUUID(), reason: "E2E frozen refund" } });
-  expect(frozen.status()).toBe(409);
+  expect(sql(`SELECT actor FROM refund_audit_events WHERE payment_id='${second}'`)).toBe("local-admin");
 });
+}

@@ -195,6 +195,11 @@ export function fetchBatch(batchId: string) {
     `/v1/admin/settlement/batches/${batchId}`);
 }
 
+export function fetchAdjustments(batchId: string, offset = 0) {
+  return adminRequest<SettlementBatch[]>(
+    `/v1/admin/settlement/batches/${batchId}/adjustments?limit=50&offset=${offset}`);
+}
+
 export function fetchBatchItems(batchId: string) {
   return adminRequest<BatchItem[]>(
     `/v1/admin/settlement/batches/${batchId}/items`);

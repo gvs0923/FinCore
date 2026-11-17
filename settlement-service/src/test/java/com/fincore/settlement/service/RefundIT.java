@@ -57,6 +57,7 @@ class RefundIT {
     @Autowired private RefundService refunds;
     @Autowired private SettlementBatchService batches;
     @Autowired private JdbcTemplate jdbc;
+    @Autowired private ReconciliationService reconciliation;
 
     @Test
     void refundPersistsAndQueuesLedgerEvent() {
@@ -180,19 +181,117 @@ class RefundIT {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(strings = {"RECONCILED", "PAID_OUT"})
-    void frozenBatchRefundIsRejectedWithoutFinancialWrites(String status) {
+    void frozenBatchRefundCreatesSeparateAdjustmentWithoutChangingOriginal(String status) {
         String merchant = "merchant-" + UUID.randomUUID();
         UUID paymentId = UUID.randomUUID();
         ingestion.ingest(new CapturedPayment(paymentId, merchant, "order-" + paymentId,
                 "capture-" + paymentId, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
         var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
         jdbc.update("UPDATE settlement_batches SET status = ? WHERE id = ?", status, batch.id());
-        var error = assertThrows(ResponseStatusException.class,
-                () -> refunds.refund(paymentId, "frozen-" + paymentId, "reason", "admin"));
-        assertEquals(409, error.getStatusCode().value());
-        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_refunds WHERE payment_id = ?", Long.class, paymentId));
-        assertEquals(0L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_outbox_events WHERE aggregate_id = ?", Long.class, paymentId));
+        var original = batches.get(batch.id());
+        var refund = refunds.refund(paymentId, "frozen-" + paymentId, "reason", "admin");
+        assertEquals(10_000, refund.amountMinor());
+        assertEquals(original, batches.get(batch.id()));
+        UUID adjustmentId = jdbc.queryForObject("SELECT id FROM settlement_batches WHERE adjustment_refund_id = ?",
+                UUID.class, refund.id());
+        var replay = refunds.refund(paymentId, "frozen-" + paymentId, "reason", "admin");
+        assertEquals(adjustmentId, refund.adjustmentBatchId());
+        assertEquals(adjustmentId, replay.adjustmentBatchId());
+        assertTrue(replay.replayed());
+        var adjustment = batches.get(adjustmentId);
+        assertEquals("REFUND_ADJUSTMENT", adjustment.batchKind());
+        assertEquals(batch.id(), adjustment.originalBatchId());
+        assertEquals(refund.id(), adjustment.adjustmentRefundId());
+        assertEquals(java.util.List.of(adjustment), batches.adjustments(batch.id(), 50, 0));
+        assertEquals("OPEN", adjustment.status());
+        assertEquals(-10_000, adjustment.netMinor());
+        assertEquals(0, adjustment.grossMinor());
+        assertEquals(0, adjustment.feesMinor());
+        assertEquals(10_000, adjustment.refundsMinor());
+        var items = batches.items(adjustmentId, 50, 0);
+        assertEquals(1, items.size());
+        assertEquals("refund:" + refund.id(), items.getFirst().processorRef());
+        assertEquals(-10_000, items.getFirst().amountMinor());
+        assertThrows(ResponseStatusException.class, () -> batches.payout(adjustmentId));
+        var mismatch = reconciliation.importReport(adjustmentId, "mismatch", java.util.List.of(
+                new com.fincore.settlement.reconciliation.ReconciliationModels.SettlementRow(
+                        "refund:" + refund.id(), "USD", -9_999, 0)));
+        assertTrue(mismatch.breakDetected());
+        assertEquals(1, mismatch.mismatchedCount());
+        assertEquals("OPEN", batches.get(adjustmentId).status());
+        var clean = reconciliation.importReport(adjustmentId, "clean", java.util.List.of(
+                new com.fincore.settlement.reconciliation.ReconciliationModels.SettlementRow(
+                        "refund:" + refund.id(), "USD", -10_000, 0)));
+        assertFalse(clean.breakDetected());
+        assertEquals("RECOVERED", batches.payout(adjustmentId).status());
+        assertThrows(ResponseStatusException.class, () -> batches.payout(adjustmentId));
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_outbox_events WHERE aggregate_id = ?",
+                Long.class, adjustmentId));
+        assertEquals(original, batches.get(batch.id()));
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_refunds WHERE payment_id = ?", Long.class, paymentId));
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_outbox_events WHERE aggregate_id = ?", Long.class, paymentId));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void concurrentLateRefundsProduceOneAdjustment(boolean sameKey) throws Exception {
+        String merchant = "merchant-" + UUID.randomUUID();
+        UUID paymentId = UUID.randomUUID();
+        ingestion.ingest(new CapturedPayment(paymentId, merchant, "order-" + paymentId,
+                "capture-" + paymentId, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
+        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
+        jdbc.update("UPDATE settlement_batches SET status = 'PAID_OUT' WHERE id = ?", batch.id());
+        var original = batches.get(batch.id());
+        String key = "late-" + paymentId;
+        var start = new java.util.concurrent.CountDownLatch(1);
+        try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<Object> first = () -> {
+                start.await();
+                try { return refunds.refund(paymentId, key, "reason", "admin"); }
+                catch (ResponseStatusException e) { return e.getStatusCode().value(); }
+            };
+            java.util.concurrent.Callable<Object> second = () -> {
+                start.await();
+                try { return refunds.refund(paymentId, sameKey ? key : key + "-other", "reason", "admin"); }
+                catch (ResponseStatusException e) { return e.getStatusCode().value(); }
+            };
+            var a = executor.submit(first);
+            var b = executor.submit(second);
+            start.countDown();
+            var results = java.util.List.of(a.get(15, java.util.concurrent.TimeUnit.SECONDS),
+                    b.get(15, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(sameKey ? 2 : 1, results.stream().filter(RefundResponse.class::isInstance).count());
+            if (sameKey) {
+                var firstResult = (RefundResponse) results.getFirst();
+                var secondResult = (RefundResponse) results.getLast();
+                assertEquals(firstResult.adjustmentBatchId(), secondResult.adjustmentBatchId());
+                assertNotEquals(firstResult.replayed(), secondResult.replayed());
+            } else assertTrue(results.contains(409));
+        }
+        assertEquals(1, batches.adjustments(batch.id(), 50, 0).size());
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM refund_audit_events WHERE payment_id = ?", Long.class, paymentId));
+        assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_outbox_events WHERE aggregate_id = ?", Long.class, paymentId));
+        assertEquals(original, batches.get(batch.id()));
+    }
+
+    @Test
+    void separateLateRefundsCreateSeparateAdjustmentsInSameMerchantDay() {
+        String merchant = "merchant-" + UUID.randomUUID();
+        var ids = java.util.List.of(UUID.randomUUID(), UUID.randomUUID());
+        for (UUID id : ids) {
+            ingestion.ingest(new CapturedPayment(id, merchant, "order-" + id,
+                    "capture-" + id, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
+        }
+        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
+        jdbc.update("UPDATE settlement_batches SET status = 'RECONCILED' WHERE id = ?", batch.id());
+        for (UUID id : ids) refunds.refund(id, "late-" + id, "reason", "admin");
+        var adjustments = batches.adjustments(batch.id(), 50, 0);
+        assertEquals(2, adjustments.size());
+        assertEquals(adjustments.getFirst().settlementDate(), adjustments.getLast().settlementDate());
+        assertNotEquals(adjustments.getFirst().id(), adjustments.getLast().id());
+        assertEquals(batch.id(), batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10)).id());
         assertEquals(0, batches.get(batch.id()).refundsMinor());
+        assertEquals(1, batches.adjustments(batch.id(), 1, 1).size());
     }
 
     private UUID capture(long amount) {

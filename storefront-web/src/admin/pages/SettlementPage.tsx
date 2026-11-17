@@ -8,6 +8,7 @@ const STATUS_STYLE: Record<string, string> = {
   OPEN: "bg-sky-100 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
   RECONCILED: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
   PAID_OUT: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
+  RECOVERED: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300",
 };
 
 export default function SettlementPage() {
@@ -78,7 +79,11 @@ export default function SettlementPage() {
                     {b.settlementDate}
                   </Link>
                 </td>
-                <td>{b.merchantId}</td>
+                <td>{b.merchantId}
+                  <span className="block text-xs text-slate-500">
+                    {b.batchKind === "REFUND_ADJUSTMENT" ? "Refund adjustment" : "Daily settlement"}
+                  </span>
+                </td>
                 <td>
                   <span className={`rounded px-2 py-0.5 text-xs font-semibold ${STATUS_STYLE[b.status]}`}>
                     {b.status}

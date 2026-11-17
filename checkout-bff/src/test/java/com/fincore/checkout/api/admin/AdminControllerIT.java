@@ -90,6 +90,7 @@ class AdminControllerIT {
             "/v1/admin/settlement/batches",
             "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001",
             "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/items",
+            "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/adjustments",
             "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/reconciliation-runs",
             "/v1/admin/settlement/reconciliation-runs/00000000-0000-0000-0000-000000000001/items"
     })
@@ -114,6 +115,10 @@ class AdminControllerIT {
     @Test
     void reconciliationReadRoutesForwardToSettlement() throws Exception {
         var id = java.util.UUID.randomUUID();
+        when(settlementClient.adjustments(id, 50, 0)).thenReturn(List.of());
+        mockMvc.perform(get("/v1/admin/settlement/batches/" + id + "/adjustments")
+                        .header(AUTH, "test-token")).andExpect(status().isOk());
+        org.mockito.Mockito.verify(settlementClient).adjustments(id, 50, 0);
         when(settlementClient.runs(id)).thenReturn(List.of());
         when(settlementClient.runItems(id)).thenReturn(List.of());
         mockMvc.perform(get("/v1/admin/settlement/batches/" + id + "/reconciliation-runs")
@@ -141,7 +146,7 @@ class AdminControllerIT {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/v1/admin/settlement/batches/" + id + "/payout")
                         .header(AUTH, "test-token"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail").value("Request conflicts with current state; frozen batches require a settlement adjustment"));
+                .andExpect(jsonPath("$.detail").value("Request conflicts with current state; refresh the record before retrying"));
     }
 
     @Test

@@ -8,6 +8,15 @@ describe("processor CSV", () => {
     expect(parseProcessorCsv('\uFEFF' + header.replace(/\n/g, '\r\n') + '"capture,""one""",USD,10000,320\r\n'))
       .toEqual([{ processorRef: 'capture,"one"', currency: "USD", amountMinor: 10000, feeMinor: 320 }]);
   });
+  it("accepts signed adjustment amounts only when explicitly enabled", () => {
+    const csv = header + "refund:one,USD,-10000,0";
+    expect(() => parseProcessorCsv(csv)).toThrow();
+    expect(parseProcessorCsv(csv, true)).toEqual([
+      { processorRef: "refund:one", currency: "USD", amountMinor: -10000, feeMinor: 0 },
+    ]);
+    expect(() => parseProcessorCsv(header + "refund:one,USD,-9007199254740992,0", true)).toThrow();
+    expect(() => parseProcessorCsv(header + "refund:one,USD,-10000,-1", true)).toThrow();
+  });
   it.each([
     "wrong,header\nref,USD,1,1",
     header,

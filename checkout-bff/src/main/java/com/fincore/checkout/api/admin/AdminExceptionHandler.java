@@ -16,7 +16,7 @@ public class AdminExceptionHandler {
             case 400 -> ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Invalid admin request");
             case 404 -> ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Requested record not found");
             case 409 -> ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
-                    "Request conflicts with current state; frozen batches require a settlement adjustment");
+                    "Request conflicts with current state; refresh the record before retrying");
             default -> ProblemDetail.forStatusAndDetail(HttpStatus.BAD_GATEWAY, "Admin data is unavailable");
         };
     }

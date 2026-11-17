@@ -44,7 +44,7 @@ function OrderDetail({ paymentId }: { paymentId: string }) {
       {entry.entryType} {formatLedgerAmount(entry.amount, entry.currency)} · {entry.reference}
     </li>)}</ul>}
     {payment.status === "CAPTURED" && !refund.isSuccess && <div className="space-y-3">
-      <p>Full refunds only. Frozen settlement batches require an adjustment and cannot be refunded here.</p>
+      <p>Full refunds only. Refunds against frozen batches automatically create a separate adjustment for reconciliation and simulated merchant recovery.</p>
       <label className="block">Refund reason
         <input className="ml-3 rounded border p-2" value={reason} maxLength={1000}
           disabled={refund.isPending || confirming} onChange={e => setReason(e.target.value)} />
@@ -58,6 +58,8 @@ function OrderDetail({ paymentId }: { paymentId: string }) {
     </div>}
     {refund.isError && <p role="alert">{refund.error.message}. Retrying is safe.</p>}
     {refund.data && <p role="status">Refund recorded: {refund.data.id}. Ledger reversal processes asynchronously.</p>}
+    {refund.data?.adjustmentBatchId && <Link className="block text-indigo-500 underline"
+      to={`/settlement/${refund.data.adjustmentBatchId}`}>Open refund adjustment</Link>}
     {reversal.isError && <p>Reversal not available yet; the journal will refresh automatically.</p>}
     {reversal.data && <ul>{reversal.data.entries.map(entry => <li key={entry.entryId}>
       {entry.entryType} {formatLedgerAmount(entry.amount, entry.currency)}

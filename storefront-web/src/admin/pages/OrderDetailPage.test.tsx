@@ -31,7 +31,7 @@ describe("order refund", () => {
     const user = userEvent.setup();
     vi.mocked(refundPayment).mockRejectedValueOnce(new Error("Network interrupted"))
       .mockResolvedValue({ id: "refund-1", paymentId: "payment-1", amountMinor: 10000,
-        currency: "USD", status: "REFUNDED", replayed: true });
+        currency: "USD", status: "REFUNDED", replayed: true, adjustmentBatchId: null });
     const first = show();
     await user.type(await screen.findByRole("textbox", { name: "Refund reason" }), "Customer request");
     await user.click(screen.getByRole("button", { name: "Refund payment" }));

@@ -4,11 +4,11 @@ import type { components } from "../../api/schema";
 const rowSchema = z.object({
   processorRef: z.string().min(1).max(255),
   currency: z.literal("USD"),
-  amountMinor: z.string().regex(/^\d+$/).transform(Number).refine(Number.isSafeInteger),
+  amountMinor: z.string().regex(/^-?\d+$/).transform(Number).refine(Number.isSafeInteger),
   feeMinor: z.string().regex(/^\d+$/).transform(Number).refine(Number.isSafeInteger),
 });
 
-export function parseProcessorCsv(csv: string): Required<components["schemas"]["ProcessorRow"]>[] {
+export function parseProcessorCsv(csv: string, allowNegativeAmounts = false): Required<components["schemas"]["ProcessorRow"]>[] {
   if (csv.length > 2_000_000) throw new Error("Report exceeds 2 MB");
   const records: string[][] = [];
   let fields: string[] = [], field = "", quoted = false, closed = false;
@@ -40,7 +40,10 @@ export function parseProcessorCsv(csv: string): Required<components["schemas"]["
   return records.map((record, i) => {
     if (record.length !== 4) throw new Error(`Invalid column count on row ${i + 2}`);
     const result = rowSchema.safeParse(Object.fromEntries(header.map((h, n) => [h, record[n]])));
-    if (!result.success) throw new Error(`Invalid values on row ${i + 2}`);
+    if (!result.success || result.data.amountMinor === 0
+        || (!allowNegativeAmounts && result.data.amountMinor < 0)) {
+      throw new Error(`Invalid values on row ${i + 2}`);
+    }
     if (refs.has(result.data.processorRef)) throw new Error(`Duplicate reference on row ${i + 2}`);
     refs.add(result.data.processorRef);
     return result.data;

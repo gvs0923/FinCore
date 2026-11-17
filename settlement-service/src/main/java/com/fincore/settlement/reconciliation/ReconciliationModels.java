@@ -44,9 +44,9 @@ public final class ReconciliationModels {
                         "Currency must be a three-letter uppercase code");
             }
 
-            if (amountMinor <= 0 || feeMinor < 0) {
+            if (amountMinor == 0 || feeMinor < 0) {
                 throw new IllegalArgumentException(
-                        "Amount must be positive and fee non-negative");
+                        "Amount must be non-zero and fee non-negative");
             }
         }
     }

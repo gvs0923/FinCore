@@ -39,6 +39,11 @@ public class SettlementClient {
                 .retrieve().body(new ParameterizedTypeReference<>() {});
     }
 
+    public List<SettlementBatch> adjustments(UUID batchId, int limit, long offset) {
+        return restClient.get().uri("/internal/settlement/batches/{id}/adjustments?limit={l}&offset={o}", batchId, limit, offset)
+                .retrieve().body(new ParameterizedTypeReference<>() {});
+    }
+
     public SettlementBatch payout(UUID batchId) {
         return restClient.post().uri("/internal/settlement/batches/{id}/payout", batchId)
                 .retrieve().body(SettlementBatch.class);

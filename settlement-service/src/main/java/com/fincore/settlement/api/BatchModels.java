@@ -24,7 +24,10 @@ public final class BatchModels {
             long grossMinor,
             long feesMinor,
             long refundsMinor,
-            long netMinor) {
+            long netMinor,
+            String batchKind,
+            UUID originalBatchId,
+            UUID adjustmentRefundId) {
     }
 
     public record BatchItemResponse(
@@ -48,6 +51,7 @@ public final class BatchModels {
             long amountMinor,
             String currency,
             String status,
-            boolean replayed) {
+            boolean replayed,
+            UUID adjustmentBatchId) {
     }
 }

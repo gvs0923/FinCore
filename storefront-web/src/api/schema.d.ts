@@ -212,6 +212,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/settlement/batches/{batchId}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["settlementAdjustments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/risk/queue": {
         parameters: {
             query?: never;
@@ -402,6 +418,8 @@ export interface components {
             currency?: string;
             status?: string;
             replayed?: boolean;
+            /** Format: uuid */
+            adjustmentBatchId?: string | null;
         };
         SettlementBatch: {
             /** Format: uuid */
@@ -421,6 +439,11 @@ export interface components {
             refundsMinor?: number;
             /** Format: int64 */
             netMinor?: number;
+            batchKind?: string;
+            /** Format: uuid */
+            originalBatchId?: string | null;
+            /** Format: uuid */
+            adjustmentRefundId?: string | null;
         };
         ProcessorReport: {
             reportRef?: string;
@@ -902,6 +925,31 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["BatchItem"][];
+                };
+            };
+        };
+    };
+    settlementAdjustments: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                batchId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SettlementBatch"][];
                 };
             };
         };

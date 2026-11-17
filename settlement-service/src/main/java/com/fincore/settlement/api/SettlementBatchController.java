@@ -49,6 +49,13 @@ public class SettlementBatchController {
         return batchService.items(batchId, limit, offset);
     }
 
+    @GetMapping("/{batchId}/adjustments")
+    public List<BatchResponse> adjustments(@PathVariable UUID batchId,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") long offset) {
+        return batchService.adjustments(batchId, limit, offset);
+    }
+
     @PostMapping("/{batchId}/payout")
     public BatchResponse payout(
             @PathVariable("batchId") UUID batchId) {
