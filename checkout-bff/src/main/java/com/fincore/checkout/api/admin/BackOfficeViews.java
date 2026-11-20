@@ -1,10 +1,14 @@
 package com.fincore.checkout.api.admin;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 public final class BackOfficeViews {
     private BackOfficeViews() {}
@@ -35,6 +39,18 @@ public final class BackOfficeViews {
             String entryType, BigDecimal amount, String currency, OffsetDateTime createdAt) {}
     public record LedgerJournal(UUID transactionId, String reference, String description,
             OffsetDateTime createdAt, List<LedgerEntryRow> entries) {}
+    public record SettlementSummary(@Schema(requiredMode = REQUIRED) String currency,
+            @Schema(requiredMode = REQUIRED) List<BatchStatusCount> batches,
+            @Schema(requiredMode = REQUIRED) long refundCount,
+            @Schema(requiredMode = REQUIRED) long refundMinor,
+            @Schema(requiredMode = REQUIRED) long payoutCount,
+            @Schema(requiredMode = REQUIRED) long payoutMinor,
+            @Schema(requiredMode = REQUIRED) long reconciliationRuns,
+            @Schema(requiredMode = REQUIRED) long reconciliationBreaks) {}
+    public record BatchStatusCount(@Schema(requiredMode = REQUIRED) String batchKind,
+            @Schema(requiredMode = REQUIRED) String status,
+            @Schema(requiredMode = REQUIRED) long count,
+            @Schema(requiredMode = REQUIRED) long netMinor) {}
     public record Order(UUID id, String merchantRef, long amount, String currency,
             String status, String declineReason, String cardBrand, String cardLast4,
             OffsetDateTime createdAt) {}

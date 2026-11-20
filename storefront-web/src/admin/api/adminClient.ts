@@ -82,6 +82,7 @@ export interface OverviewResponse {
   traffic: TrafficSummary;
   ledger: LedgerSummary;
   risk: RiskSummary;
+  settlement: SettlementSummary | null;
   health: {
     status: MetricsStatus;
     lag: LagInfo;
@@ -161,6 +162,8 @@ export interface LedgerTimeseriesRow {
 export type ReviewItem = components["schemas"]["ReviewItem"];
 
 export type RiskSummary = components["schemas"]["RiskSummary"];
+
+export type SettlementSummary = components["schemas"]["SettlementSummary"];
 
 export function fetchReviewQueue() {
   return adminRequest<ReviewItem[]>("/v1/admin/risk/queue");

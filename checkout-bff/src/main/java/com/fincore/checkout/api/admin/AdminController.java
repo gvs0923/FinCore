@@ -70,9 +70,19 @@ public class AdminController {
         metricsClient.requestSummary(from, to),
         metricsClient.ledgerSummary(from, to),
         metricsClient.riskSummary(from, to),
+        settlementSummaryBestEffort(from, to),
         Map.of(
                 "status", metricsClient.status(),
                 "lag", metricsClient.lag()));
+    }
+
+    private SettlementSummary settlementSummaryBestEffort(Instant from, Instant to) {
+        try {
+            return settlementClient.summary(from, to);
+        } catch (RestClientException e) {
+            log.warn("Settlement summary is unavailable");
+            return null;
+        }
     }
 
     @GetMapping("/integrity/balances")

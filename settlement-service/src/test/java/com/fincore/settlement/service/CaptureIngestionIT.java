@@ -21,7 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @SpringBootTest(properties = {
         "spring.kafka.listener.auto-startup=false",
         "spring.kafka.admin.auto-create=false",
-        "spring.task.scheduling.enabled=false"
+        "spring.task.scheduling.enabled=false",
+        "fincore.settlement.jobs.enabled=false"
 })
 class CaptureIngestionIT {
 

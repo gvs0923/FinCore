@@ -23,6 +23,7 @@ import {
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import RiskSection from "../components/RiskSection";
+import SettlementSection from "../components/SettlementSection";
 
 const RANGE_OPTIONS = [
   { label: "24h", hours: 24 },
@@ -390,6 +391,12 @@ export default function DashboardPage() {
 
       <RiskSection
         risk={overview.data?.risk}
+        loading={overview.isLoading}
+        error={overview.isError}
+      />
+
+      <SettlementSection
+        settlement={overview.data?.settlement}
         loading={overview.isLoading}
         error={overview.isError}
       />

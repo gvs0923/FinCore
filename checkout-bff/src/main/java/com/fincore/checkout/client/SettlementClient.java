@@ -64,6 +64,23 @@ public class SettlementClient {
                 .retrieve().body(new ParameterizedTypeReference<>() {});
     }
 
+    // Window is fixed (last 24h) by the overview, so one short-TTL entry is
+    // enough to stop every dashboard poll from querying settlement-service.
+    private static final long SUMMARY_TTL_MS = 15_000;
+    private volatile SettlementSummary cachedSummary;
+    private volatile long cachedSummaryAtMs;
+
+    public SettlementSummary summary(java.time.Instant from, java.time.Instant to) {
+        if (cachedSummary != null && System.currentTimeMillis() - cachedSummaryAtMs < SUMMARY_TTL_MS) {
+            return cachedSummary;
+        }
+        SettlementSummary summary = restClient.get()
+                .uri("/internal/settlement/summary?from={f}&to={t}", from, to)
+                .retrieve().body(SettlementSummary.class);
+        cachedSummaryAtMs = System.currentTimeMillis();
+        return cachedSummary = summary;
+    }
+
     public RefundResult refund(RefundRequest request) {
         return restClient.post().uri("/internal/settlement/refunds")
                 .body(Map.of("paymentId", request.paymentId(), "idempotencyKey", request.idempotencyKey(),

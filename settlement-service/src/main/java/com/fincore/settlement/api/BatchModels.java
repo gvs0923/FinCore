@@ -54,4 +54,23 @@ public final class BatchModels {
             boolean replayed,
             UUID adjustmentBatchId) {
     }
+
+    // Batch counts reflect current state; the other figures are for the window.
+    public record SettlementSummary(
+            String currency,
+            java.util.List<BatchStatusCount> batches,
+            long refundCount,
+            long refundMinor,
+            long payoutCount,
+            long payoutMinor,
+            long reconciliationRuns,
+            long reconciliationBreaks) {
+    }
+
+    public record BatchStatusCount(
+            String batchKind,
+            String status,
+            long count,
+            long netMinor) {
+    }
 }

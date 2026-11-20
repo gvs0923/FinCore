@@ -511,6 +511,14 @@ export interface components {
             signals: string;
             created_at: string;
         };
+        BatchStatusCount: {
+            batchKind: string;
+            status: string;
+            /** Format: int64 */
+            count: number;
+            /** Format: int64 */
+            netMinor: number;
+        };
         DecisionCount: {
             decision: string;
             /** Format: int64 */
@@ -530,6 +538,7 @@ export interface components {
                 [key: string]: unknown;
             };
             risk: components["schemas"]["RiskSummary"];
+            settlement: components["schemas"]["SettlementSummary"];
             health?: {
                 [key: string]: unknown;
             };
@@ -548,6 +557,22 @@ export interface components {
             score_bucket: string;
             /** Format: int64 */
             count: number;
+        };
+        SettlementSummary: {
+            currency: string;
+            batches: components["schemas"]["BatchStatusCount"][];
+            /** Format: int64 */
+            refundCount: number;
+            /** Format: int64 */
+            refundMinor: number;
+            /** Format: int64 */
+            payoutCount: number;
+            /** Format: int64 */
+            payoutMinor: number;
+            /** Format: int64 */
+            reconciliationRuns: number;
+            /** Format: int64 */
+            reconciliationBreaks: number;
         };
         Order: {
             /** Format: uuid */

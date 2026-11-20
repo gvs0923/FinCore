@@ -61,6 +61,29 @@ class AdminControllerIT {
     }
 
     @Test
+    void overview_includesSettlementSummary() throws Exception {
+        when(settlementClient.summary(any(), any())).thenReturn(new BackOfficeViews.SettlementSummary(
+                "USD", List.of(new BackOfficeViews.BatchStatusCount("DAILY", "OPEN", 2, 19_360)),
+                1, 10_000, 1, 9_680, 3, 1));
+
+        mockMvc.perform(get("/v1/admin/overview").header(AUTH, "test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.settlement.batches[0].status").value("OPEN"))
+                .andExpect(jsonPath("$.settlement.refundMinor").value(10_000))
+                .andExpect(jsonPath("$.settlement.reconciliationBreaks").value(1));
+    }
+
+    @Test
+    void overview_settlementDown_stillReturns200() throws Exception {
+        when(settlementClient.summary(any(), any()))
+                .thenThrow(new org.springframework.web.client.ResourceAccessException("connection refused"));
+
+        mockMvc.perform(get("/v1/admin/overview").header(AUTH, "test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.settlement").doesNotExist());
+    }
+
+    @Test
     void timeseries_unknownMetric_returns400() throws Exception {
         Instant to = Instant.now();
         Instant from = to.minusSeconds(3600);
