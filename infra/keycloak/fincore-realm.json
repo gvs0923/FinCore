@@ -24,11 +24,12 @@
       "redirectUris": [
         "http://127.0.0.1:5173/login/oauth2/code/keycloak",
         "http://localhost:5173/login/oauth2/code/keycloak",
-        "http://localhost:8089/login/oauth2/code/keycloak"
+        "http://localhost:8089/login/oauth2/code/keycloak",
+        "http://localhost:8080/login/oauth2/code/keycloak"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://127.0.0.1:5173/admin##http://localhost:5173/admin##http://localhost:8089/admin"
+        "post.logout.redirect.uris": "http://127.0.0.1:5173/admin##http://localhost:5173/admin##http://localhost:8089/admin##http://localhost:8080/admin"
       },
       "protocolMappers": [
         { "name": "fincore-roles", "protocol": "openid-connect",

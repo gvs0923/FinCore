@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { execFileSync, execSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 
 const BROKER_CONTAINER = "fincore-kafka-1";
 
@@ -27,7 +27,8 @@ function financialState(sessionId: string) {
 
 async function waitForRiskWindow() {
   const fingerprint = createHash("sha256").update("4242424242424242").digest("hex").slice(0, 16);
-  const keys = [`risk:card:${fingerprint}`, "risk:ip:127.0.0.1", "risk:ip:0:0:0:0:0:0:0:1", "risk:ip:::1"];
+  const keys = [`risk:card:${fingerprint}`, ...["127.0.0.1", "0:0:0:0:0:0:0:1", "::1"].map(ip =>
+    `risk:ip:${createHmac("sha256", process.env.FINCORE_RISK_PSEUDONYM_KEY ?? "dev-only-pseudonym-key").update("ip\0").update(ip).digest("hex").slice(0, 32)}`)];
   const ttls = keys.map((key) => Number(execSync(
     `docker exec fincore-redis-1 redis-cli TTL '${key}'`, { encoding: "utf8" },
   ).trim()));

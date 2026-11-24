@@ -30,7 +30,7 @@ class RiskEngineTest {
 
     @BeforeEach
     void setUp() {
-        engine = new RiskEngine(velocity, devices, jdbc);
+        engine = new RiskEngine(velocity, devices, jdbc, new Pseudonymizer("test-key"));
         when(velocity.hit(anyString())).thenReturn(1L);
     }
 
@@ -109,7 +109,7 @@ class RiskEngineTest {
 
     @Test
     void reviewsHighIpVelocity() {
-        when(velocity.hit("risk:ip:127.0.0.1")).thenReturn(9L);
+        when(velocity.hit("risk:ip:" + new Pseudonymizer("test-key").of("ip", "127.0.0.1"))).thenReturn(9L);
 
         RiskResult result = engine.assess(request(10_000));
 

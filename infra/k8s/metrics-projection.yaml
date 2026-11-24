@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-projection
+  labels: { app.kubernetes.io/name: metrics-projection, app.kubernetes.io/part-of: fincore }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: metrics-projection }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: metrics-projection, app.kubernetes.io/part-of: fincore, fincore/tier: core }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: fincore/metrics-projection:dev
+          imagePullPolicy: Never
+          ports:
+            - { name: http, containerPort: 9095 }
+            - { name: management, containerPort: 8081 }
+          envFrom:
+            - configMapRef: { name: fincore-jvm-env }
+            - secretRef: { name: fincore-secrets }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: management }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-projection
+spec:
+  selector: { app.kubernetes.io/name: metrics-projection }
+  ports:
+    - { name: http, port: 9095, targetPort: http }
+    - { name: management, port: 8081, targetPort: management }

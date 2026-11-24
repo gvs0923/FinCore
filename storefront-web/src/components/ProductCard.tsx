@@ -27,9 +27,9 @@ export default function ProductCard({ product }: { product: Product }) {
         <ProductIcon icon={product.icon} />
       </div>
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-semibold leading-snug text-slate-900 dark:text-white">
+        <h2 className="font-semibold leading-snug text-slate-900 dark:text-white">
           {product.name}
-        </h3>
+        </h2>
         <p className="mt-1.5 flex-1 text-[13px] leading-relaxed text-slate-500 dark:text-slate-400">
           {product.tagline}
         </p>
