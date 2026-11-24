@@ -20,7 +20,8 @@ public class OidcClientConfig {
             @Value("${fincore.oidc.browser-base}") String browserBase,
             @Value("${fincore.oidc.backchannel-base}") String backchannelBase,
             @Value("${fincore.oidc.client-id}") String clientId,
-            @Value("${fincore.oidc.client-secret}") String clientSecret) {
+            @Value("${fincore.oidc.client-secret}") String clientSecret,
+            @Value("${fincore.oidc.public-base}") String publicBase) {
         // Explicit endpoints instead of issuer-uri discovery: the BFF boots (and
         // shoppers can check out) even when Keycloak is down.
         return new InMemoryClientRegistrationRepository(ClientRegistration
@@ -28,7 +29,7 @@ public class OidcClientConfig {
                 .clientId(clientId)
                 .clientSecret(clientSecret)
                 .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                .redirectUri(publicBase + "/login/oauth2/code/{registrationId}")
                 .scope("openid", "profile")
                 .issuerUri(browserBase)
                 .authorizationUri(browserBase + OIDC + "/auth")

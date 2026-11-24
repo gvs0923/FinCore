@@ -5,6 +5,7 @@ export type AdminMe = components["schemas"]["AdminMe"];
 
 
 export type AdminUser = AdminMe;
+export const ADMIN_SESSION_EXPIRED = "fincore-admin-session-expired";
 
 
 function xsrfToken(): string {
@@ -23,13 +24,12 @@ async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T>
     },
   });
   if (res.status === 401) {
+    window.dispatchEvent(new Event(ADMIN_SESSION_EXPIRED));
     throw new AdminAuthError();
-  }
-  if (res.status === 403) {
-    throw new AdminForbiddenError();
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
+    if (res.status === 403 && body?.code !== "CSRF_TOKEN_INVALID") throw new AdminForbiddenError();
     throw new Error(body?.message ?? body?.detail ?? `Admin request failed: ${res.status}`);
   }
   return res.json();
@@ -63,7 +63,7 @@ export function login(): void {
 export function takeReturnPath(): string | null {
   const path = sessionStorage.getItem(RETURN_PATH_KEY);
   sessionStorage.removeItem(RETURN_PATH_KEY);
-  return path;
+  return path && /^\/admin(?:\/|\?|$)/.test(path) ? path : null;
 }
 
 export function fetchMe() {
@@ -73,12 +73,8 @@ export function fetchMe() {
 // Logout ends the IdP session too; the BFF answers {redirectUrl} instead of a
 // 302 so fetch can hand it to the browser. 
 export async function logout(): Promise<void> {
-  const res = await fetch("/logout", {
-    method: "POST",
-    headers: { "X-XSRF-TOKEN": xsrfToken(), ...traceHeaders() },
-  });
-  const body = await res.json().catch(() => null);
-  window.location.assign(body?.redirectUrl ?? "/admin");
+  const body = await adminRequest<{ redirectUrl?: string }>("/logout", { method: "POST" });
+  window.location.assign(body.redirectUrl ?? "/admin");
 }
 
 // --- API response types ---

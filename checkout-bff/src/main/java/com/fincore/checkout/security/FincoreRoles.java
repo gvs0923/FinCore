@@ -38,7 +38,7 @@ public class FincoreRoles implements GrantedAuthoritiesMapper {
 
     public JwtAuthenticationToken fromJwt(Jwt jwt) {
         return new JwtAuthenticationToken(jwt, toAuthorities(jwt.getClaimAsStringList("roles")),
-                "client:" + jwt.getClaimAsString("azp"));
+                "token:" + jwt.getSubject());
     }
 
     private static List<GrantedAuthority> toAuthorities(List<String> idpRoles) {

@@ -37,7 +37,7 @@ public record Actor(String subject, String displayName, List<String> roles) {
         return switch (auth.getPrincipal()) {
             case OidcUser user -> new Actor("user:" + clean(user.getSubject()),
                     clean(user.getPreferredUsername()), roles);
-            case Jwt jwt -> new Actor("client:" + clean(jwt.getClaimAsString("azp")),
+            case Jwt jwt -> new Actor("token:" + clean(jwt.getSubject()),
                     clean(jwt.getClaimAsString("azp")), roles);
             default -> throw new IllegalStateException(
                     "Unsupported principal " + auth.getPrincipal().getClass().getSimpleName());

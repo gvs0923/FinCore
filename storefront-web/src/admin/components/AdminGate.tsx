@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { AdminAuthError, AdminForbiddenError, fetchMe, login, logout, takeReturnPath,
+import { useQueryClient } from "@tanstack/react-query";
+import { ADMIN_SESSION_EXPIRED, AdminAuthError, AdminForbiddenError, fetchMe, login, logout, takeReturnPath,
          type AdminUser } from "../api/adminClient";
 import { AdminUserContext } from "../auth/adminUser";
 
@@ -7,13 +8,20 @@ type Gate =
   | { kind: "loading" }
   | { kind: "ready"; user: AdminUser }
   | { kind: "forbidden" }
+  | { kind: "expired" }
   | { kind: "error"; message: string };
 
 export default function AdminGate({ children }: { children: ReactNode }) {
   const [gate, setGate] = useState<Gate>({ kind: "loading" });
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     let cancelled = false;
+    const expired = () => {
+      queryClient.clear();
+      setGate({ kind: "expired" });
+    };
+    window.addEventListener(ADMIN_SESSION_EXPIRED, expired);
     fetchMe().then(
       (user) => {
         if (cancelled) return;
@@ -29,8 +37,11 @@ export default function AdminGate({ children }: { children: ReactNode }) {
           : { kind: "error", message: error instanceof Error ? error.message : "Unknown error" });
       },
     );
-    return () => { cancelled = true; };
-  }, []);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(ADMIN_SESSION_EXPIRED, expired);
+    };
+  }, [queryClient]);
 
   if (gate.kind === "ready") {
     return <AdminUserContext.Provider value={gate.user}>{children}</AdminUserContext.Provider>;
@@ -44,11 +55,16 @@ export default function AdminGate({ children }: { children: ReactNode }) {
         {gate.kind === "forbidden" && (
           <>
             <p className="mb-4">Your account has no FinCore admin role.</p>
-            <button onClick={logout} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">
+            <button onClick={() => void logout().catch((error: Error) => setGate({ kind: "error", message: error.message }))}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">
               Sign out
             </button>
           </>
         )}
+        {gate.kind === "expired" && <>
+          <p>Your session expired. Sign in again to continue.</p>
+          <button onClick={login}>Sign in</button>
+        </>}
         {gate.kind === "error" && `Could not reach the admin API: ${gate.message}`}
       </div>
     </div>

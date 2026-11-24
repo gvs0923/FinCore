@@ -23,6 +23,14 @@ subprojects {
         }
     }
 
+    plugins.withId('org.springframework.boot') {
+        if (project.name in ['checkout-bff', 'payment-service', 'ledger-service']) {
+            dependencies {
+                implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+            }
+        }
+    }
+
     tasks.named('test') {
         useJUnitPlatform()
 

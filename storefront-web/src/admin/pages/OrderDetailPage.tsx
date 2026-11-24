@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { fetchOrder, fetchJournal, refundPayment } from "../api/adminClient";
 import { formatMoney } from "../../lib/money";
 import { formatLedgerAmount } from "../api/ledgerMoney";
+import { hasRole, useAdminUser } from "../auth/adminUser";
 
 export default function OrderDetailPage() {
   const { paymentId = "" } = useParams();
@@ -11,6 +12,7 @@ export default function OrderDetailPage() {
 }
 
 function OrderDetail({ paymentId }: { paymentId: string }) {
+  const canRefund = hasRole(useAdminUser(), "FINANCE_OPS");
   const [reason, setReason] = useState("");
   const [confirming, setConfirming] = useState(false);
   const order = useQuery({ queryKey: ["order", paymentId], queryFn: () => fetchOrder(paymentId) });
@@ -43,7 +45,7 @@ function OrderDetail({ paymentId }: { paymentId: string }) {
     {journal.data && <ul>{journal.data.entries.map(entry => <li key={entry.entryId}>
       {entry.entryType} {formatLedgerAmount(entry.amount, entry.currency)} · {entry.reference}
     </li>)}</ul>}
-    {payment.status === "CAPTURED" && !refund.isSuccess && <div className="space-y-3">
+    {canRefund && payment.status === "CAPTURED" && !refund.isSuccess && <div className="space-y-3">
       <p>Full refunds only. Refunds against frozen batches automatically create a separate adjustment for reconciliation and simulated merchant recovery.</p>
       <label className="block">Refund reason
         <input className="ml-3 rounded border p-2" value={reason} maxLength={1000}

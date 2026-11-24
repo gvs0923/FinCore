@@ -22,21 +22,30 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http,
                                             ClientRegistrationRepository clients,
                                             FincoreRoles roles,
-                                            ApiSecurityErrors errors) throws Exception {
+                                            ApiSecurityErrors errors,
+                                            AdminAuditStore audit,
+                                            @org.springframework.beans.factory.annotation.Value("${fincore.oidc.public-base}") String publicBase) throws Exception {
         var authorizationRequests = new DefaultOAuth2AuthorizationRequestResolver(
                 clients, "/oauth2/authorization");
         authorizationRequests.setAuthorizationRequestCustomizer(
                 OAuth2AuthorizationRequestCustomizers.withPkce());
 
         var oidcLogout = new OidcClientInitiatedLogoutSuccessHandler(clients);
-        oidcLogout.setPostLogoutRedirectUri("{baseUrl}/admin");
+        oidcLogout.setPostLogoutRedirectUri(publicBase + "/admin");
         oidcLogout.setRedirectStrategy(errors::logoutRedirectAsJson);
 
         http
+            .addFilterBefore(new AdminAuditFilter(audit), org.springframework.security.web.csrf.CsrfFilter.class)
+            .headers(headers -> headers.contentSecurityPolicy(csp -> csp.policyDirectives(
+                    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
+                            + "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")))
             .authorizeHttpRequests(auth -> auth
                 // Most specific first. Mutations name their role explicitly.
                 .requestMatchers(HttpMethod.POST, "/v1/admin/risk/*/resolve").hasRole(RISK_ANALYST)
-                .requestMatchers(HttpMethod.POST, "/v1/admin/settlement/**").hasRole(FINANCE_OPS)
+                .requestMatchers(HttpMethod.POST, "/v1/admin/settlement/batches",
+                        "/v1/admin/settlement/batches/*/payout",
+                        "/v1/admin/settlement/batches/*/reconciliation",
+                        "/v1/admin/settlement/refunds").hasRole(FINANCE_OPS)
                 .requestMatchers(HttpMethod.GET, "/v1/admin/**").hasRole(VIEWER)
                 // Fail closed: a new admin POST/PUT/DELETE is denied until someone
                 // decides which role owns it.
@@ -45,7 +54,7 @@ public class SecurityConfig {
             .oauth2Login(login -> login
                 .authorizationEndpoint(a -> a.authorizationRequestResolver(authorizationRequests))
                 .userInfoEndpoint(u -> u.userAuthoritiesMapper(roles))
-                .defaultSuccessUrl("/admin", true))
+                .defaultSuccessUrl(publicBase + "/admin", true))
             .oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(roles::fromJwt)))
             .logout(logout -> logout.logoutSuccessHandler(oidcLogout))
             // Shopper endpoints carry no ambient credential, so CSRF adds nothing there.

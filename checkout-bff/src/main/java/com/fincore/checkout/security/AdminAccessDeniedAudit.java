@@ -24,6 +24,6 @@ class AdminAccessDeniedAudit {
         String actor = auth == null || auth instanceof AnonymousAuthenticationToken
                 ? "anonymous" : Actor.from(auth).subject();
         audit.warn("admin_access_denied actor={} method={} path={}",
-                actor, request.getMethod(), request.getRequestURI());
+                actor, request.getMethod(), "/v1/admin/**");
     }
 }

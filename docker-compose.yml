@@ -6,19 +6,19 @@ services:
       POSTGRES_USER: fincore
       POSTGRES_PASSWORD: fincore
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - fincore-postgres-data:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   kafka:
     image: apache/kafka:3.8.1
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     environment:
       # KRaft mode (no ZooKeeper needed)
       KAFKA_NODE_ID: 1
@@ -36,7 +36,7 @@ services:
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
     ports:
-      - "8088:8080"
+      - "127.0.0.1:8088:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: fincore-local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
@@ -57,7 +57,7 @@ services:
       # JDK in the image SIGILLs on SVE under Colima vz on Apple Silicon
       JAVA_OPTS_APPEND: ${FINCORE_JVM_EXTRA:--XX:UseSVE=0}
     ports:
-      - "8180:8080"
+      - "127.0.0.1:8180:8080"
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import:ro
 

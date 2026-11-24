@@ -10,7 +10,8 @@ export default defineConfig({
   },
   projects: [
     { name: "setup", testMatch: /auth\.setup\.ts/ },
-    { name: "e2e", dependencies: ["setup"], use: { storageState: "e2e/.auth/finance.json" } },
+    { name: "e2e", dependencies: ["setup"], testIgnore: /auth\.setup\.ts/,
+      use: { storageState: "e2e/.auth/finance.json" } },
   ],
   webServer: {
     command: "npm run dev",

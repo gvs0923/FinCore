@@ -14,7 +14,7 @@ function sql(query: string) {
     { encoding: "utf8" }).trim();
 }
 
-test("admin refunds a captured order with one audited reversing journal", async ({ page, context, request }) => {
+test("admin refunds a captured order with one audited reversing journal", async ({ page, request }) => {
   test.setTimeout(150_000);
   const card = "4242424242424242";
   const fingerprint = createHash("sha256").update(card).digest("hex").slice(0, 16);
@@ -49,7 +49,7 @@ test("admin refunds a captured order with one audited reversing journal", async 
 });
 
 for (const originalStatus of ["RECONCILED", "PAID_OUT"]) {
-test(`admin reconciles and recovers a late refund against a ${originalStatus} batch`, async ({ page, context, request }) => {
+test(`admin reconciles and recovers a late refund against a ${originalStatus} batch`, async ({ page, request }) => {
   test.setTimeout(90_000);
   const merchantId = `e2e-settlement-${randomUUID()}`;
   const first = randomUUID(), second = randomUUID();

@@ -30,7 +30,14 @@ public class OutboxPublisher {
     public void publishPendingEvents() {
         List<OutboxEvent> events = outboxEventRepository.findUnpublishedForUpdate();
         for (OutboxEvent event : events) {
-            try {
+            try (var scope = io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator.getInstance()
+                    .extract(io.opentelemetry.context.Context.root(), event.getTraceparent(),
+                            new io.opentelemetry.context.propagation.TextMapGetter<String>() {
+                                public Iterable<String> keys(String carrier) { return List.of("traceparent"); }
+                                public String get(String carrier, String key) {
+                                    return "traceparent".equals(key) ? carrier : null;
+                                }
+                            }).makeCurrent()) {
                 // Topic = event type (e.g. "payment.captured")
                 // Key   = aggregate ID (ensures ordering per payment)
                 kafkaTemplate.send(

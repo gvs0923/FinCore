@@ -88,7 +88,9 @@ test.describe("Checkout flow", () => {
 
     const sessionId = page.url().split("/checkout/")[1];
     let submissions = 0;
+    let traceId = "";
     await page.route(`**/v1/checkout/sessions/${sessionId}/pay`, async (route) => {
+      traceId = route.request().headers()["traceparent"]?.split("-")[1] ?? "";
       const responses = await Promise.all([route.fetch(), route.fetch()]);
       submissions += responses.length;
       for (const response of responses) expect(response.ok()).toBe(true);
@@ -114,6 +116,10 @@ test.describe("Checkout flow", () => {
     expect(session.paymentId).toMatch(/^[0-9a-f-]{36}$/i);
     await expect.poll(() => financialState(sessionId), { timeout: 15_000 })
       .toBe("1|1|CAPTURED|1|1|2");
+    expect(traceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(execFileSync("docker", ["exec", "fincore-postgres-1", "psql", "-U", "fincore", "-d", "fincore", "-tAc",
+      `SELECT split_part(traceparent, '-', 2) FROM outbox_events WHERE aggregate_id='${session.paymentId}' AND event_type='payment.captured'`],
+      { encoding: "utf8" }).trim()).toBe(traceId);
   });
 
   test("declined card shows failure without ledger entries", async ({ page }) => {
@@ -209,11 +215,14 @@ test.describe("Checkout flow", () => {
   });
 });
 
-test("analyst review updates the shopper and removes resolved payments", async ({ page, context, request, playwright }) => {
+test.describe("analyst authorization", () => {
+  test.use({ storageState: "e2e/.auth/analyst.json" });
+
+test("analyst review updates the shopper and removes resolved payments", async ({ page, context, request, playwright, baseURL }) => {
   test.setTimeout(120_000);
   await waitForRiskWindow();
   // Anonymous probes need their own context — `request` carries the finance session.
-  const anon = await playwright.request.newContext();
+  const anon = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
   expect((await anon.get("/v1/admin/risk/queue")).status()).toBe(401);
   // No session and no XSRF token: the CSRF filter rejects before authz.
   expect((await anon.post(`/v1/admin/risk/${crypto.randomUUID()}/resolve?action=approve`)).status()).toBe(403);
@@ -266,6 +275,7 @@ test("analyst review updates the shopper and removes resolved payments", async (
   await adminPage.goto("/admin");
   await expect(adminPage.getByRole("heading", { name: "Risk · last 24 hours" })).toBeVisible();
   await adminPage.close();
+});
 });
 
 test("development harness visibly escalates velocity to a risk block", async ({ page }) => {

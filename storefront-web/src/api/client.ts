@@ -1,11 +1,12 @@
 import type { components } from "./schema";
+import { traceHeaders } from "../lib/tracing";
 
 export type SessionResponse = components["schemas"]["SessionResponse"];
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
     ...init,
+    headers: { "Content-Type": "application/json", ...traceHeaders(), ...init?.headers },
   });
   if (!res.ok) {
     const problem = await res.json().catch(() => null);

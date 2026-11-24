@@ -29,8 +29,8 @@ public class MetricsClient {
         }
     }
 
-    public MetricsClient(@Value("${fincore.metrics.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+    public MetricsClient(@Value("${fincore.metrics.base-url}") String baseUrl, RestClient.Builder builder) {
+        this.restClient = builder.baseUrl(baseUrl).build();
     }
 
     @SuppressWarnings("unchecked")
