@@ -20,8 +20,7 @@ available documentation.
 | `ledger-service`  | Double-entry ledger, source of financial truth |
 | `payment-service` | Payment state machine, idempotency, orchestration |
 | `risk-service`    | Fraud/risk rules engine                       |
-| `settlement-service` | Merchant settlement batches                |
-| `reconciliation-service` | Internal vs. processor reconciliation  |
+| `settlement-service` | Merchant settlement batches, refunds, and processor reconciliation (`…settlement.reconciliation` package) |
 | `ai-service`      | Python ML risk scoring + LLM explanations (later phase) |
 
 ## Local development

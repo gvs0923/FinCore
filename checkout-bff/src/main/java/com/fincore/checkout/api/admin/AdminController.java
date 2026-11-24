@@ -1,14 +1,17 @@
 package com.fincore.checkout.api.admin;
 
+import com.fincore.checkout.api.admin.BackOfficeViews.*;
 import com.fincore.checkout.client.LedgerAdminClient;
 import com.fincore.checkout.client.MetricsClient;
 import com.fincore.checkout.client.PaymentClient;
 import com.fincore.checkout.client.RiskAdminClient;
+import com.fincore.checkout.client.SettlementClient;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,15 +46,18 @@ public class AdminController {
     private final LedgerAdminClient ledgerClient;
     private final RiskAdminClient riskAdminClient;
     private final PaymentClient paymentClient;
+    private final SettlementClient settlementClient;
 
     public AdminController(MetricsClient metricsClient,
                            LedgerAdminClient ledgerClient,
                            RiskAdminClient riskAdminClient,
-                           PaymentClient paymentClient) {
+                           PaymentClient paymentClient,
+                           SettlementClient settlementClient) {
         this.metricsClient = metricsClient;
         this.ledgerClient = ledgerClient;
         this.riskAdminClient = riskAdminClient;
         this.paymentClient = paymentClient;
+        this.settlementClient = settlementClient;
     }
 
     @GetMapping("/overview")
@@ -64,9 +70,19 @@ public class AdminController {
         metricsClient.requestSummary(from, to),
         metricsClient.ledgerSummary(from, to),
         metricsClient.riskSummary(from, to),
+        settlementSummaryBestEffort(from, to),
         Map.of(
                 "status", metricsClient.status(),
                 "lag", metricsClient.lag()));
+    }
+
+    private SettlementSummary settlementSummaryBestEffort(Instant from, Instant to) {
+        try {
+            return settlementClient.summary(from, to);
+        } catch (RestClientException e) {
+            log.warn("Settlement summary is unavailable");
+            return null;
+        }
     }
 
     @GetMapping("/integrity/balances")
@@ -178,4 +194,111 @@ public class AdminController {
         log.warn("Risk review resolution marker could not be updated");
     }
     }
+
+    @GetMapping("/settlement/batches")
+    public List<SettlementBatch> settlementBatches(
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") long offset) {
+        return settlementClient.listBatches(limit, offset);
+    }
+
+     @PostMapping("/settlement/batches")
+    public SettlementBatch createSettlementBatch(
+            @RequestParam String merchantId,
+            @RequestParam String currency,
+            @RequestParam String settlementDate) {
+        return settlementClient.createBatch(
+                merchantId, currency, settlementDate);
+    }
+ 
+    @GetMapping("/settlement/batches/{batchId}")
+    public SettlementBatch settlementBatch(
+            @PathVariable UUID batchId) {
+        return settlementClient.getBatch(batchId);
+    }
+ 
+    @GetMapping("/settlement/batches/{batchId}/items")
+    public List<BatchItem> settlementBatchItems(
+            @PathVariable UUID batchId,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") long offset) {
+        if (limit < 1 || limit > 100 || offset < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "limit 1-100, offset >= 0");
+        }
+        return settlementClient.batchItems(batchId, limit, offset);
+    }
+ 
+    @GetMapping("/settlement/batches/{batchId}/adjustments")
+    public List<SettlementBatch> settlementAdjustments(@PathVariable UUID batchId,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(defaultValue = "0") long offset) {
+        if (limit < 1 || limit > 100 || offset < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "limit 1-100, offset >= 0");
+        }
+        return settlementClient.adjustments(batchId, limit, offset);
+    }
+
+    @PostMapping("/settlement/batches/{batchId}/payout")
+    public SettlementBatch settlementPayout(
+            @PathVariable UUID batchId) {
+        return settlementClient.payout(batchId);
+    }
+ 
+    @PostMapping("/settlement/batches/{batchId}/reconciliation")
+    public ReconciliationRun settlementReconcile(
+            @PathVariable UUID batchId,
+            @RequestBody ProcessorReport report) {
+        return settlementClient.importReport(batchId, report);
+    }
+ 
+    @GetMapping("/settlement/batches/{batchId}/reconciliation-runs")
+    public List<ReconciliationRun> reconciliationRuns(@PathVariable UUID batchId) {
+        return settlementClient.runs(batchId);
+    }
+
+    @GetMapping("/settlement/reconciliation-runs/{runId}/items")
+    public List<ReconciliationItem> reconciliationItems(@PathVariable UUID runId) {
+        return settlementClient.runItems(runId);
+    }
+
+    @GetMapping("/orders")
+    public List<Order> orders(@RequestParam(defaultValue = "0") int page) {
+        if (page < 0 || page > 10_000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid page");
+        }
+        return paymentClient.orders(page);
+    }
+
+    @GetMapping("/orders/{paymentId}")
+    public Order order(@PathVariable UUID paymentId) {
+        return paymentClient.order(paymentId);
+    }
+
+    @PostMapping("/settlement/refunds")
+    public RefundResult settlementRefund(
+            @jakarta.validation.Valid @RequestBody RefundRequest refundRequest) {
+        // Idempotency-Key minted by the UI per refund attempt —
+        // same pattern as checkout, retries reuse it.
+        return settlementClient.refund(refundRequest);
+    }
+
+        @GetMapping("/ledger/accounts")
+    public List<LedgerAccount> ledgerAccounts() {
+        return ledgerClient.accounts();
+    }
+
+    @GetMapping("/ledger/accounts/{accountRef}/entries")
+    public List<LedgerEntryRow> ledgerAccountEntries(
+            @PathVariable String accountRef) {
+        return ledgerClient.accountEntries(accountRef);
+    }
+
+    @GetMapping("/ledger/transactions/{reference:.+}")
+    public LedgerJournal ledgerJournal(
+            @PathVariable String reference) {
+        return ledgerClient.journal(reference);
+    }
+
+
 }

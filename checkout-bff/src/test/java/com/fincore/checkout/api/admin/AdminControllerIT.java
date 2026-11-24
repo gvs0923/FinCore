@@ -30,6 +30,8 @@ class AdminControllerIT {
 
     @MockitoBean private MetricsClient metricsClient;
     @MockitoBean private LedgerAdminClient ledgerAdminClient;
+    @MockitoBean private com.fincore.checkout.client.SettlementClient settlementClient;
+    @MockitoBean private com.fincore.checkout.client.PaymentClient paymentClient;
 
     private static final String AUTH = "X-Admin-Token";
 
@@ -59,6 +61,29 @@ class AdminControllerIT {
     }
 
     @Test
+    void overview_includesSettlementSummary() throws Exception {
+        when(settlementClient.summary(any(), any())).thenReturn(new BackOfficeViews.SettlementSummary(
+                "USD", List.of(new BackOfficeViews.BatchStatusCount("DAILY", "OPEN", 2, 19_360)),
+                1, 10_000, 1, 9_680, 3, 1));
+
+        mockMvc.perform(get("/v1/admin/overview").header(AUTH, "test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.settlement.batches[0].status").value("OPEN"))
+                .andExpect(jsonPath("$.settlement.refundMinor").value(10_000))
+                .andExpect(jsonPath("$.settlement.reconciliationBreaks").value(1));
+    }
+
+    @Test
+    void overview_settlementDown_stillReturns200() throws Exception {
+        when(settlementClient.summary(any(), any()))
+                .thenThrow(new org.springframework.web.client.ResourceAccessException("connection refused"));
+
+        mockMvc.perform(get("/v1/admin/overview").header(AUTH, "test-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.settlement").doesNotExist());
+    }
+
+    @Test
     void timeseries_unknownMetric_returns400() throws Exception {
         Instant to = Instant.now();
         Instant from = to.minusSeconds(3600);
@@ -79,11 +104,72 @@ class AdminControllerIT {
             "/v1/admin/overview",
             "/v1/admin/metrics/timeseries?metric=payment_count"
                     + "&from=2025-01-01T00:00:00Z&to=2025-01-02T00:00:00Z",
-            "/v1/admin/integrity/balances"
+            "/v1/admin/integrity/balances",
+            "/v1/admin/orders",
+            "/v1/admin/orders/00000000-0000-0000-0000-000000000001",
+            "/v1/admin/ledger/accounts",
+            "/v1/admin/ledger/accounts/test/entries",
+            "/v1/admin/ledger/transactions/payment:test",
+            "/v1/admin/settlement/batches",
+            "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001",
+            "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/items",
+            "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/adjustments",
+            "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/reconciliation-runs",
+            "/v1/admin/settlement/reconciliation-runs/00000000-0000-0000-0000-000000000001/items"
     })
     void everyGetRoute_withoutToken_returns401(String uri) throws Exception {
         mockMvc.perform(get(uri))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "/v1/admin/settlement/batches",
+            "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/payout",
+            "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/reconciliation",
+            "/v1/admin/settlement/refunds"
+    })
+    void mutationsRequireAuthentication(String uri) throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(uri)
+                        .contentType("application/json").content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void reconciliationReadRoutesForwardToSettlement() throws Exception {
+        var id = java.util.UUID.randomUUID();
+        when(settlementClient.adjustments(id, 50, 0)).thenReturn(List.of());
+        mockMvc.perform(get("/v1/admin/settlement/batches/" + id + "/adjustments")
+                        .header(AUTH, "test-token")).andExpect(status().isOk());
+        org.mockito.Mockito.verify(settlementClient).adjustments(id, 50, 0);
+        when(settlementClient.runs(id)).thenReturn(List.of());
+        when(settlementClient.runItems(id)).thenReturn(List.of());
+        mockMvc.perform(get("/v1/admin/settlement/batches/" + id + "/reconciliation-runs")
+                        .header(AUTH, "test-token")).andExpect(status().isOk());
+        mockMvc.perform(get("/v1/admin/settlement/reconciliation-runs/" + id + "/items")
+                        .header(AUTH, "test-token")).andExpect(status().isOk());
+        org.mockito.Mockito.verify(settlementClient).runs(id);
+        org.mockito.Mockito.verify(settlementClient).runItems(id);
+    }
+
+    @Test
+    void invalidRefundIsRejectedBeforeUpstreamCall() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/v1/admin/settlement/refunds")
+                        .header(AUTH, "test-token").contentType("application/json").content("{}"))
+                .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verifyNoInteractions(settlementClient);
+    }
+
+    @Test
+    void upstreamConflictIsSanitizedAndPreserved() throws Exception {
+        var id = java.util.UUID.randomUUID();
+        when(settlementClient.payout(id)).thenThrow(org.springframework.web.client.HttpClientErrorException.create(
+                org.springframework.http.HttpStatus.CONFLICT, "internal-service-detail", org.springframework.http.HttpHeaders.EMPTY,
+                "sensitive upstream payload".getBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/v1/admin/settlement/batches/" + id + "/payout")
+                        .header(AUTH, "test-token"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("Request conflicts with current state; refresh the record before retrying"));
     }
 
     @Test

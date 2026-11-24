@@ -69,7 +69,7 @@ public class LedgerService {
         assertBalanced(lines);
 
         transactionRepository.findByReference(reference).ifPresent(existing -> {
-            throw new IllegalStateException("Ledger transaction already posted for reference: " + reference);
+            throw new DuplicatePostingException(reference);
         });
 
         LedgerTransaction transaction = transactionRepository.save(new LedgerTransaction(reference, description));
