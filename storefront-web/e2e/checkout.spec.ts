@@ -89,9 +89,11 @@ test.describe("Checkout flow", () => {
 
     const sessionId = page.url().split("/checkout/")[1];
     let submissions = 0;
-    let traceId = "";
+    const traceIds = new Set<string>();
     await page.route(`**/v1/checkout/sessions/${sessionId}/pay`, async (route) => {
-      traceId = route.request().headers()["traceparent"]?.split("-")[1] ?? "";
+      const traceId = route.request().headers()["traceparent"]?.split("-")[1] ?? "";
+      expect(traceId).toMatch(/^[0-9a-f]{32}$/);
+      traceIds.add(traceId);
       const responses = await Promise.all([route.fetch(), route.fetch()]);
       submissions += responses.length;
       for (const response of responses) expect(response.ok()).toBe(true);
@@ -102,7 +104,10 @@ test.describe("Checkout flow", () => {
     // A second sequential click() would block in actionability checks
     // because the button detaches/disables during navigation.
     const payButton = page.getByRole("button", { name: /pay/i });
-    await Promise.allSettled([payButton.click(), payButton.click()]);
+    await payButton.evaluate((button: HTMLButtonElement) => {
+      button.click();
+      button.click();
+    });
 
     await expect(page).toHaveURL(/\/result\//);
     await expect(
@@ -117,10 +122,12 @@ test.describe("Checkout flow", () => {
     expect(session.paymentId).toMatch(/^[0-9a-f-]{36}$/i);
     await expect.poll(() => financialState(sessionId), { timeout: 15_000 })
       .toBe("1|1|CAPTURED|1|1|2");
-    expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-    expect(execFileSync("docker", ["exec", "fincore-postgres-1", "psql", "-U", "fincore", "-d", "fincore", "-tAc",
+    expect(traceIds.size).toBeGreaterThan(0);
+    const capturedTraceId = execFileSync("docker", ["exec", "fincore-postgres-1", "psql", "-U", "fincore", "-d", "fincore", "-tAc",
       `SELECT split_part(traceparent, '-', 2) FROM outbox_events WHERE aggregate_id='${session.paymentId}' AND event_type='payment.captured'`],
-      { encoding: "utf8" }).trim()).toBe(traceId);
+      { encoding: "utf8" }).trim();
+    expect(capturedTraceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(traceIds.has(capturedTraceId)).toBe(true);
   });
 
   test("declined card shows failure without ledger entries", async ({ page }) => {

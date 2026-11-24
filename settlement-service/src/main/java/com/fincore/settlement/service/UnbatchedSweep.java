@@ -2,11 +2,13 @@ package com.fincore.settlement.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "fincore.settlement.jobs.enabled", havingValue = "true", matchIfMissing = true)
 public class UnbatchedSweep {
 
     private static final Logger log =

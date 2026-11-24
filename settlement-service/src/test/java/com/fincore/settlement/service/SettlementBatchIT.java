@@ -72,6 +72,16 @@ class SettlementBatchIT {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private org.springframework.context.ApplicationContext context;
+
+    @Test
+    void backgroundPollersAreDisabledInIntegrationTests() {
+        assertTrue(context.getBeansOfType(com.fincore.settlement.outbox.OutboxPublisher.class).isEmpty());
+        assertTrue(context.getBeansOfType(UnbatchedSweep.class).isEmpty());
+        assertTrue(context.getBeansOfType(SettlementJobScheduler.class).isEmpty());
+    }
+
     @Test
     void calculatesTotalsAndPersistsFeeSnapshots() {
         String merchant = merchant();

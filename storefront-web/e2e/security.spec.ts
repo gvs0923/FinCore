@@ -5,6 +5,14 @@ for (const role of ["viewer", "finance", "analyst"]) {
     test.use({ storageState: `e2e/.auth/${role}.json` });
 
     test("enforces roles, protects mutations and serves CSP", async ({ page, request }) => {
+      const cspViolations: string[] = [];
+      await page.exposeFunction("recordCspViolation", (directive: string) => cspViolations.push(directive));
+      await page.addInitScript(() => {
+        document.addEventListener("securitypolicyviolation", (event) => {
+          void (window as unknown as { recordCspViolation: (directive: string) => Promise<void> })
+            .recordCspViolation(event.violatedDirective);
+        });
+      });
       const response = await page.goto("/admin/settlement");
       const csp = response?.headers()["content-security-policy"];
       expect(csp).toContain("script-src 'self'");
@@ -28,6 +36,7 @@ for (const role of ["viewer", "finance", "analyst"]) {
       const missingCsrf = await request.post(`/v1/admin/settlement/batches/${crypto.randomUUID()}/payout`);
       expect(missingCsrf.status()).toBe(403);
       expect((await missingCsrf.json()).code).toBe("CSRF_TOKEN_INVALID");
+      expect(cspViolations).toEqual([]);
     });
   });
 }
