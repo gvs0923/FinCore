@@ -3,6 +3,7 @@ package com.fincore.ledger.consumer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import com.fincore.ledger.domain.EntryType;
+import com.fincore.ledger.service.DuplicatePostingException;
 import com.fincore.ledger.service.JournalLine;
 import com.fincore.ledger.service.LedgerService;
 import org.slf4j.Logger;
@@ -51,7 +52,7 @@ public class PaymentCapturedConsumer {
             );
 
             log.info("Ledger transaction posted for payment {}", paymentId);
-        } catch (IllegalStateException e) {
+        } catch (DuplicatePostingException e) {
             // "already posted for reference" = idempotent duplicate, safe to ignore
             log.info("Duplicate event, ledger already has this transaction: {}",
                     e.getMessage());

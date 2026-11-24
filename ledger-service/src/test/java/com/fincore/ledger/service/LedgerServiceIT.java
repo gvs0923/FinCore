@@ -94,7 +94,7 @@ class LedgerServiceIT {
 
         ledgerService.postTransaction(reference, "first post", lines);
 
-        assertThrows(IllegalStateException.class, () ->
+        assertThrows(DuplicatePostingException.class, () ->
                 ledgerService.postTransaction(reference, "duplicate post", lines));
     }
 

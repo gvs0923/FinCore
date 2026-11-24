@@ -47,6 +47,9 @@ public final class RiskViews {
             Map<String, Object> traffic,
             Map<String, Object> ledger,
             @Schema(requiredMode = Schema.RequiredMode.REQUIRED) RiskSummary risk,
+            // null when settlement-service is unreachable
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED, nullable = true)
+            BackOfficeViews.SettlementSummary settlement,
             Map<String, Object> health
     ) {}
 }

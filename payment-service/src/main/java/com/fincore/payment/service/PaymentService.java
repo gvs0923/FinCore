@@ -177,7 +177,7 @@ public class PaymentService {
         String ledgerRef = "payment:" + payment.getId();
         payment.markCaptured(ledgerRef);
         paymentRepository.save(payment);
-        publishEvent(payment, "payment.captured");
+        publishCapturedEvent(payment, capResult.processorRef());
         log.info("Payment {} captured, outbox event written",
                 payment.getId());
 
@@ -300,8 +300,37 @@ public class PaymentService {
 
         payment.markCaptured("payment:" + paymentId);
         paymentRepository.save(payment);
-        publishEvent(payment, "payment.captured");
+        publishCapturedEvent(payment, capResult.processorRef());
         log.info("Reviewed payment {} approved and captured", paymentId);
         return payment;
+    }
+
+    private void publishCapturedEvent(Payment payment, String processorRef) {
+    if (processorRef == null || processorRef.isBlank()) {
+        throw new IllegalStateException(
+                "Successful capture requires a processor reference");
+    }
+
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("schemaVersion", 2);
+    payload.put("paymentId", payment.getId().toString());
+    payload.put("merchantId", "demo-merchant");
+    payload.put("merchantRef", payment.getMerchantRef());
+    payload.put("amount", payment.getAmount());
+    payload.put("currency", payment.getCurrency());
+    payload.put("status", payment.getStatus().name());
+    payload.put("cardBrand", payment.getCardBrand());
+    payload.put("cardLast4", payment.getCardLast4());
+    payload.put("processorRef", processorRef);
+    payload.put(
+            "capturedAt",
+            payment.getUpdatedAt().toInstant().toString());
+
+    outboxEventRepository.save(
+            new OutboxEvent(
+                    "Payment",
+                    payment.getId(),
+                    "payment.captured",
+                    riskJson.writeValueAsString(payload)));
     }
 }

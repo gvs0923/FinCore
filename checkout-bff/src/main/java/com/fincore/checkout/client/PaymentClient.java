@@ -52,6 +52,16 @@ public class PaymentClient {
         return result;
     }
 
+    public List<com.fincore.checkout.api.admin.BackOfficeViews.Order> orders(int page) {
+        return restClient.get().uri("/internal/orders?page={page}", page)
+                .retrieve().body(new ParameterizedTypeReference<>() {});
+    }
+
+    public com.fincore.checkout.api.admin.BackOfficeViews.Order order(java.util.UUID id) {
+        return restClient.get().uri("/v1/payments/{id}", id)
+                .retrieve().body(com.fincore.checkout.api.admin.BackOfficeViews.Order.class);
+    }
+
     public record PendingReview(String id, String createdAt) {}
 
     public List<PendingReview> pendingReviews() {
