@@ -14,8 +14,8 @@ import java.util.UUID;
 public class SettlementClient {
     private final RestClient restClient;
 
-    public SettlementClient(@Value("${fincore.settlement.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+    public SettlementClient(@Value("${fincore.settlement.base-url}") String baseUrl, RestClient.Builder builder) {
+        this.restClient = builder.baseUrl(baseUrl).build();
     }
 
     public SettlementBatch createBatch(String merchantId, String currency, String settlementDate) {
@@ -84,7 +84,8 @@ public class SettlementClient {
     public RefundResult refund(RefundRequest request) {
         return restClient.post().uri("/internal/settlement/refunds")
                 .body(Map.of("paymentId", request.paymentId(), "idempotencyKey", request.idempotencyKey(),
-                        "reason", request.reason(), "actor", "local-admin"))
+                        "reason", request.reason(), "actor",
+                        com.fincore.checkout.security.Actor.current().orElseThrow().subject()))
                 .retrieve().body(RefundResult.class);
     }
 }

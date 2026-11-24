@@ -19,8 +19,8 @@ public class PaymentClient {
 
     private final RestClient restClient;
 
-    public PaymentClient(@Value("${fincore.payment.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+    public PaymentClient(@Value("${fincore.payment.base-url}") String baseUrl, RestClient.Builder builder) {
+        this.restClient = builder.baseUrl(baseUrl).build();
     }
 
     public Map<String, Object> createPayment(String idempotencyKey, String merchantRef,

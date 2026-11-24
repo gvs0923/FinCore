@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchReviewQueue, resolveReview } from "../api/adminClient";
+import { hasRole, useAdminUser } from "../auth/adminUser";
 
 export default function ReviewQueuePage() {
+  const canResolve = hasRole(useAdminUser(), "RISK_ANALYST");
   const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["risk-queue"],
@@ -63,10 +65,10 @@ export default function ReviewQueuePage() {
               <td className="text-xs">{new Date(r.created_at).toLocaleString()}</td>
               <td className="space-x-2 text-right">
                 <button onClick={() => requestResolution(r.payment_id, "approve")}
-                  disabled={resolve.isPending}
+                  disabled={!canResolve || resolve.isPending}
                   className="rounded bg-emerald-600 px-2.5 py-1 text-xs text-white disabled:opacity-50">Approve</button>
                 <button onClick={() => requestResolution(r.payment_id, "reject")}
-                  disabled={resolve.isPending}
+                  disabled={!canResolve || resolve.isPending}
                   className="rounded bg-red-600 px-2.5 py-1 text-xs text-white disabled:opacity-50">Reject</button>
               </td>
             </tr>

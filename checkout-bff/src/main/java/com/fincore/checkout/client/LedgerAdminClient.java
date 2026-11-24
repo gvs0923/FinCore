@@ -14,8 +14,8 @@ public class LedgerAdminClient {
 
     private final RestClient restClient;
 
-    public LedgerAdminClient(@Value("${fincore.ledger.base-url}") String baseUrl) {
-        this.restClient = RestClient.builder().baseUrl(baseUrl).build();
+    public LedgerAdminClient(@Value("${fincore.ledger.base-url}") String baseUrl, RestClient.Builder builder) {
+        this.restClient = builder.baseUrl(baseUrl).build();
     }
 
     public Map<String, Object> checkIntegrity() {

@@ -4,6 +4,13 @@ import { createHash } from "node:crypto";
 
 const BROKER_CONTAINER = "fincore-kafka-1";
 
+// The session cookie rides along automatically via the project's storageState;
+// mutating calls only need the XSRF token from that same session.
+async function adminHeaders(request: import("@playwright/test").APIRequestContext) {
+  const { cookies } = await request.storageState();
+  return { "X-XSRF-TOKEN": cookies.find((c) => c.name === "XSRF-TOKEN")?.value ?? "" };
+}
+
 function financialState(sessionId: string) {
   expect(sessionId).toMatch(/^[0-9a-f-]{36}$/i);
   const sql = `WITH selected AS (SELECT * FROM payments WHERE merchant_ref='checkout-${sessionId}'),
@@ -81,7 +88,9 @@ test.describe("Checkout flow", () => {
 
     const sessionId = page.url().split("/checkout/")[1];
     let submissions = 0;
+    let traceId = "";
     await page.route(`**/v1/checkout/sessions/${sessionId}/pay`, async (route) => {
+      traceId = route.request().headers()["traceparent"]?.split("-")[1] ?? "";
       const responses = await Promise.all([route.fetch(), route.fetch()]);
       submissions += responses.length;
       for (const response of responses) expect(response.ok()).toBe(true);
@@ -107,6 +116,10 @@ test.describe("Checkout flow", () => {
     expect(session.paymentId).toMatch(/^[0-9a-f-]{36}$/i);
     await expect.poll(() => financialState(sessionId), { timeout: 15_000 })
       .toBe("1|1|CAPTURED|1|1|2");
+    expect(traceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(execFileSync("docker", ["exec", "fincore-postgres-1", "psql", "-U", "fincore", "-d", "fincore", "-tAc",
+      `SELECT split_part(traceparent, '-', 2) FROM outbox_events WHERE aggregate_id='${session.paymentId}' AND event_type='payment.captured'`],
+      { encoding: "utf8" }).trim()).toBe(traceId);
   });
 
   test("declined card shows failure without ledger entries", async ({ page }) => {
@@ -202,13 +215,18 @@ test.describe("Checkout flow", () => {
   });
 });
 
-test("analyst review updates the shopper and removes resolved payments", async ({ page, context, request }) => {
+test.describe("analyst authorization", () => {
+  test.use({ storageState: "e2e/.auth/analyst.json" });
+
+test("analyst review updates the shopper and removes resolved payments", async ({ page, context, request, playwright, baseURL }) => {
   test.setTimeout(120_000);
   await waitForRiskWindow();
-  const headers = { "X-Admin-Token": process.env.ADMIN_TOKEN ?? "dev-admin-token" };
-  expect((await request.get("/v1/admin/risk/queue")).status()).toBe(401);
-  expect((await request.post(`/v1/admin/risk/${crypto.randomUUID()}/resolve?action=approve`)).status()).toBe(401);
-  await context.addInitScript((token) => localStorage.setItem("fincore-admin-token", token), headers["X-Admin-Token"]);
+  // Anonymous probes need their own context — `request` carries the finance session.
+  const anon = await playwright.request.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+  expect((await anon.get("/v1/admin/risk/queue")).status()).toBe(401);
+  // No session and no XSRF token: the CSRF filter rejects before authz.
+  expect((await anon.post(`/v1/admin/risk/${crypto.randomUUID()}/resolve?action=approve`)).status()).toBe(403);
+  await anon.dispose();
   const adminPage = await context.newPage();
   adminPage.on("dialog", (dialog) => dialog.accept());
 
@@ -244,18 +262,20 @@ test("analyst review updates the shopper and removes resolved payments", async (
     await expect(row).toHaveCount(0);
     await expect(page.getByRole("heading", { name: action === "approve" ? "Payment succeeded" : "Payment failed" })).toBeVisible();
     await expect.poll(counts).toBe(action === "approve" ? "1|1" : "0|0");
-    const repeated = await request.post(`/v1/admin/risk/${payment.paymentId}/resolve?action=${action}`, { headers });
+    const repeated = await request.post(`/v1/admin/risk/${payment.paymentId}/resolve?action=${action}`,
+      { headers: await adminHeaders(request) });
     expect(repeated.status()).toBe(409);
     await adminPage.reload();
     await expect(adminPage.getByRole("row").filter({ hasText: payment.paymentId })).toHaveCount(0);
   }
 
-  const overview = await request.get("/v1/admin/overview", { headers });
+  const overview = await request.get("/v1/admin/overview");
   expect(overview.ok()).toBe(true);
   expect(Array.isArray((await overview.json()).risk.scoreDistribution)).toBe(true);
   await adminPage.goto("/admin");
   await expect(adminPage.getByRole("heading", { name: "Risk · last 24 hours" })).toBeVisible();
   await adminPage.close();
+});
 });
 
 test("development harness visibly escalates velocity to a risk block", async ({ page }) => {

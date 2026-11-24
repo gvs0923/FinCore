@@ -40,6 +40,20 @@ public class OutboxEvent {
     @Column(name = "published_at")
     private OffsetDateTime publishedAt;
 
+    @Column(name = "traceparent", length = 55)
+    private String traceparent;
+
+    @jakarta.persistence.PrePersist
+    void captureTraceContext() {
+        io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator.getInstance().inject(
+                io.opentelemetry.context.Context.current(), this,
+                (event, key, value) -> {
+                    if ("traceparent".equals(key)) event.traceparent = value;
+                });
+    }
+
+    public String getTraceparent() { return traceparent; }
+
     protected OutboxEvent() {}
 
     public OutboxEvent(String aggregateType, UUID aggregateId,

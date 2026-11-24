@@ -31,3 +31,5 @@ docs/
 ## Node / Frontend
 node_modules/
 dist/
+# Playwright saved login sessions (live cookies)
+storefront-web/e2e/.auth/
