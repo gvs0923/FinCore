@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { fetchBatches, createBatch } from "../api/adminClient";
 import { formatMoney } from "../../lib/money";
 import { useState } from "react";
+import { hasRole, useAdminUser } from "../auth/adminUser";
 
 const STATUS_STYLE: Record<string, string> = {
   OPEN: "bg-sky-100 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
@@ -12,6 +13,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export default function SettlementPage() {
+  const canSettle = hasRole(useAdminUser(), "FINANCE_OPS");
   const qc = useQueryClient();
   const { data: batches, isLoading, error } = useQuery({
     queryKey: ["settlement-batches"],
@@ -42,7 +44,7 @@ export default function SettlementPage() {
             className="rounded border px-2 py-1 text-sm dark:bg-slate-800" />
           <button
             onClick={() => create.mutate()}
-            disabled={create.isPending}
+            disabled={!canSettle || create.isPending}
             className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
             Create batch
           </button>

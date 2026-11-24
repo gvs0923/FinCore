@@ -1,0 +1,85 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-ingress }
+spec: { podSelector: {}, policyTypes: [Ingress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: public-entry }
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [web, keycloak] }
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ protocol: TCP, port: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: bff-from-web }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: checkout-bff } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: web } } }]
+      ports: [{ protocol: TCP, port: 8089 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: core-from-bff }
+spec:
+  podSelector: { matchLabels: { fincore/tier: core } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: checkout-bff } } }]
+      ports: [{ protocol: TCP, port: http }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: risk-from-payment }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: risk-service } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/name: payment-service } } }]
+      ports: [{ protocol: TCP, port: 9096 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: postgres-from-apps }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: postgres } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/part-of: fincore } } }]
+      ports: [{ protocol: TCP, port: 5432 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: kafka-from-apps }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: kafka } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/part-of: fincore } } }]
+      ports: [{ protocol: TCP, port: 9092 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: redis-from-apps }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: redis } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/part-of: fincore } } }]
+      ports: [{ protocol: TCP, port: 6379 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: jaeger-from-apps }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: jaeger } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app.kubernetes.io/part-of: fincore } } }]
+      ports: [{ protocol: TCP, port: 4318 }]

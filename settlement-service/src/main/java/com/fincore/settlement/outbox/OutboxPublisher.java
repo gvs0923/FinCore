@@ -2,6 +2,7 @@ package com.fincore.settlement.outbox;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -13,6 +14,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
+@ConditionalOnProperty(name = "fincore.settlement.outbox.enabled", havingValue = "true", matchIfMissing = true)
 public class OutboxPublisher {
 
     private static final Logger log =
@@ -20,18 +22,21 @@ public class OutboxPublisher {
 
     private final JdbcTemplate jdbc;
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final OutboxTrace outboxTrace;
 
     public OutboxPublisher(JdbcTemplate jdbc,
-                           KafkaTemplate<String, String> kafkaTemplate) {
+                           KafkaTemplate<String, String> kafkaTemplate,
+                           OutboxTrace outboxTrace) {
         this.jdbc = jdbc;
         this.kafkaTemplate = kafkaTemplate;
+        this.outboxTrace = outboxTrace;
     }
 
     @Scheduled(fixedDelay = 500)
     @Transactional
     public void publishPending() {
         List<Map<String, Object>> events = jdbc.queryForList("""
-                SELECT id, aggregate_id, event_type, payload
+                SELECT id, aggregate_id, event_type, payload, traceparent
                 FROM settlement_outbox_events
                 WHERE NOT published
                 ORDER BY created_at
@@ -41,11 +46,12 @@ public class OutboxPublisher {
 
         for (Map<String, Object> event : events) {
             try {
-                kafkaTemplate.send(
-                        (String) event.get("event_type"),
-                        event.get("aggregate_id").toString(),
-                        event.get("payload").toString()
-                ).get();
+                outboxTrace.inTrace((String) event.get("traceparent"),
+                        "outbox publish " + event.get("event_type"),
+                        () -> kafkaTemplate.send(
+                                (String) event.get("event_type"),
+                                event.get("aggregate_id").toString(),
+                                event.get("payload").toString()).get());
 
                 jdbc.update("""
                         UPDATE settlement_outbox_events

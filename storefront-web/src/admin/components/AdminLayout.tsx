@@ -1,5 +1,8 @@
 import { Outlet, NavLink } from "react-router-dom";
 import { useTheme } from "../../theme/theme";
+import { useState } from "react";
+import { logout } from "../api/adminClient";
+import { useAdminUser } from "../auth/adminUser";
 
 const NAV_ITEMS = [
   { to: "/", label: "Overview", end: true },
@@ -12,6 +15,19 @@ const NAV_ITEMS = [
 
 export default function AdminLayout() {
   const { theme, toggle } = useTheme();
+  const user = useAdminUser();
+  const [logoutError, setLogoutError] = useState("");
+  const [signingOut, setSigningOut] = useState(false);
+  async function signOut() {
+    setSigningOut(true);
+    setLogoutError("");
+    try {
+      await logout();
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : "Sign out failed");
+      setSigningOut(false);
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-700 dark:bg-slate-950 dark:text-slate-300">
@@ -36,6 +52,11 @@ export default function AdminLayout() {
             </span>
           </div>
 
+          <div className="flex items-center gap-3">
+            <span className="text-sm">{user.name} · {user.roles?.join(", ")}</span>
+            <button onClick={() => void signOut()} disabled={signingOut}>
+              {signingOut ? "Signing out…" : "Sign out"}
+            </button>
           <button
             onClick={toggle}
             aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
@@ -52,8 +73,10 @@ export default function AdminLayout() {
               </svg>
             )}
           </button>
+          </div>
         </div>
       </header>
+      {logoutError && <p role="alert">{logoutError}</p>}
 
       <nav className="border-b border-slate-200/60 bg-white/60 dark:border-slate-800 dark:bg-slate-950/60">
         <div className="mx-auto flex max-w-7xl gap-1 px-6">

@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import com.fincore.payment.audit.Actor;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
@@ -71,12 +72,12 @@ class PaymentRiskIT {
         assertThat(payment.getLedgerRef()).isNull();
 
         Payment approved =
-                payments.resolveReviewedPayment(payment.getId(), true);
+                payments.resolveReviewedPayment(payment.getId(), true, Actor.system("test"));
 
         assertThat(approved.getStatus()).isEqualTo(PaymentStatus.CAPTURED);
 
         assertThatThrownBy(() ->
-                payments.resolveReviewedPayment(payment.getId(), true))
+                payments.resolveReviewedPayment(payment.getId(), true, Actor.system("test")))
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(attempts.findByPaymentIdOrderByAttemptNumberAsc(payment.getId()))
@@ -91,7 +92,7 @@ class PaymentRiskIT {
         Payment payment = pay(5_000);
 
         Payment rejected =
-                payments.resolveReviewedPayment(payment.getId(), false);
+                payments.resolveReviewedPayment(payment.getId(), false, Actor.system("test"));
 
         assertThat(rejected.getStatus()).isEqualTo(PaymentStatus.DECLINED);
         assertThat(rejected.getDeclineReason())
@@ -126,7 +127,7 @@ class PaymentRiskIT {
         assertThat(payment.getStatus()).isEqualTo(PaymentStatus.REVIEW);
         org.mockito.Mockito.clearInvocations(risk);
 
-        assertThat(payments.resolveReviewedPayment(payment.getId(), true).getStatus())
+        assertThat(payments.resolveReviewedPayment(payment.getId(), true, Actor.system("test")).getStatus())
                 .isEqualTo(PaymentStatus.CAPTURED);
         org.mockito.Mockito.verifyNoInteractions(risk);
         assertThat(attempts.findByPaymentIdOrderByAttemptNumberAsc(payment.getId()))
@@ -151,7 +152,7 @@ class PaymentRiskIT {
             }
 
             try {
-                return payments.resolveReviewedPayment(payment.getId(), true)
+                return payments.resolveReviewedPayment(payment.getId(), true, Actor.system("test"))
                         .getStatus().name();
             } catch (IllegalStateException e) {
                 return "CONFLICT";

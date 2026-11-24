@@ -7,6 +7,7 @@ import {
   importReport, payoutBatch, fetchAdjustments,
 } from "../api/adminClient";
 import { formatMoney } from "../../lib/money";
+import { hasRole, useAdminUser } from "../auth/adminUser";
 
 export default function SettlementDetailPage() {
   const { batchId = "" } = useParams();
@@ -14,6 +15,7 @@ export default function SettlementDetailPage() {
 }
 
 function SettlementDetail({ batchId }: { batchId: string }) {
+  const canSettle = hasRole(useAdminUser(), "FINANCE_OPS");
   const qc = useQueryClient();
   const [reportJson, setReportJson] = useState("");
   const [reportRef, setReportRef] = useState("");
@@ -94,17 +96,17 @@ function SettlementDetail({ batchId }: { batchId: string }) {
       </div>
 
       {/* Pay out — only meaningful on a reconciled batch */}
-      <div className="mt-6 flex gap-3">
+      {canSettle && <div className="mt-6 flex gap-3">
         <button
           onClick={() => payout.mutate()}
-          disabled={batch.status !== "RECONCILED" || payout.isPending}
+          disabled={!canSettle || batch.status !== "RECONCILED" || payout.isPending}
           title={batch.status !== "RECONCILED"
             ? "Batch must be RECONCILED first" : batch.batchKind === "REFUND_ADJUSTMENT" ? "Simulate merchant recovery" : "Simulate payout"}
           className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium
                      text-white disabled:cursor-not-allowed disabled:opacity-40">
           {batch.batchKind === "REFUND_ADJUSTMENT" ? "Simulate recovery" : "Pay out"}
         </button>
-      </div>
+      </div>}
       {payout.isError &&
         <p className="mt-2 text-sm text-red-500">{(payout.error as Error).message}</p>}
 
@@ -150,7 +152,7 @@ function SettlementDetail({ batchId }: { batchId: string }) {
       </label>
       <button
         onClick={() => reconcile.mutate()}
-        disabled={batch.status !== "OPEN" || reconcile.isPending}
+        disabled={!canSettle || batch.status !== "OPEN" || reconcile.isPending}
         className="mt-2 rounded bg-indigo-600 px-4 py-2 text-sm font-medium
                    text-white disabled:opacity-40">
         Import processor report

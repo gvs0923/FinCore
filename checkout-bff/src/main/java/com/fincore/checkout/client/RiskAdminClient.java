@@ -17,14 +17,15 @@ public class RiskAdminClient {
     private final RestClient restClient;
 
     public RiskAdminClient(
-            @Value("${fincore.risk.base-url:http://localhost:9096}") String baseUrl) {
+            @Value("${fincore.risk.base-url:http://localhost:9096}") String baseUrl,
+            RestClient.Builder builder) {
         HttpClient http = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(1))
                 .build();
         JdkClientHttpRequestFactory factory =
                 new JdkClientHttpRequestFactory(http);
         factory.setReadTimeout(Duration.ofSeconds(2));
-        this.restClient = RestClient.builder()
+        this.restClient = builder
                 .baseUrl(baseUrl)
                 .requestFactory(factory)
                 .build();

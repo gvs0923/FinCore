@@ -2,6 +2,7 @@ package com.fincore.settlement.api;
 
 import com.fincore.settlement.api.BatchModels.RefundRequest;
 import com.fincore.settlement.api.BatchModels.RefundResponse;
+import com.fincore.settlement.audit.Actor;
 import com.fincore.settlement.service.RefundService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,11 +20,11 @@ public class RefundController {
     }
 
     @PostMapping
-    public RefundResponse refund(@RequestBody RefundRequest request) {
+    public RefundResponse refund(@RequestBody RefundRequest request, Actor actor) {
         return refundService.refund(
                 request.paymentId(),
                 request.idempotencyKey(),
                 request.reason(),
-                request.actor());
+                actor.subject());
     }
 }

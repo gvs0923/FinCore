@@ -1,0 +1,34 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: fincore
+resources:
+  - k8s/namespace.yaml
+  - k8s/infra.yaml
+  - k8s/ledger-service.yaml
+  - k8s/payment-service.yaml
+  - k8s/risk-service.yaml
+  - k8s/metrics-projection.yaml
+  - k8s/notification-service.yaml
+  - k8s/settlement-service.yaml
+  - k8s/checkout-bff.yaml
+  - k8s/web.yaml
+  - k8s/network-policies.yaml
+configMapGenerator:
+  - name: fincore-jvm-env
+    literals:
+      - SERVER_ADDRESS=0.0.0.0
+      - MANAGEMENT_SERVER_PORT=8081
+      - MANAGEMENT_SERVER_ADDRESS=0.0.0.0
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/fincore
+      - SPRING_KAFKA_BOOTSTRAPSERVERS=kafka:9092
+      - SPRING_DATA_REDIS_HOST=redis
+      - MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+      - FINCORE_TRACING_EXPORT_ENABLED=true
+      - JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError
+  - name: keycloak-realm
+    files:
+      - keycloak/fincore-realm.json
+secretGenerator:
+  - name: fincore-secrets
+    envs:
+      - k8s/secrets.env

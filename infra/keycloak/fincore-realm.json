@@ -1,0 +1,83 @@
+{
+  "realm": "fincore",
+  "enabled": true,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      { "name": "fincore-viewer" },
+      { "name": "fincore-risk-analyst", "composite": true,
+        "composites": { "realm": ["fincore-viewer"] } },
+      { "name": "fincore-finance-ops", "composite": true,
+        "composites": { "realm": ["fincore-viewer"] } }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "fincore-bff",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "dev-bff-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://127.0.0.1:5173/login/oauth2/code/keycloak",
+        "http://localhost:5173/login/oauth2/code/keycloak",
+        "http://localhost:8089/login/oauth2/code/keycloak",
+        "http://localhost:8080/login/oauth2/code/keycloak"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://127.0.0.1:5173/admin##http://localhost:5173/admin##http://localhost:8089/admin##http://localhost:8080/admin"
+      },
+      "protocolMappers": [
+        { "name": "fincore-roles", "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": { "claim.name": "roles", "multivalued": "true", "jsonType.label": "String",
+                      "id.token.claim": "true", "access.token.claim": "true", "userinfo.token.claim": "false" } },
+        { "name": "fincore-bff-audience", "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.client.audience": "fincore-bff",
+                      "id.token.claim": "false", "access.token.claim": "true" } }
+      ]
+    },
+    {
+      "clientId": "fincore-loadtest",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "dev-loadtest-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        { "name": "fincore-roles", "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": { "claim.name": "roles", "multivalued": "true", "jsonType.label": "String",
+                      "id.token.claim": "false", "access.token.claim": "true" } },
+        { "name": "fincore-bff-audience", "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.client.audience": "fincore-bff", "access.token.claim": "true" } }
+      ]
+    }
+  ],
+  "users": [
+    { "username": "charan", "enabled": true, "email": "charan@fincore.test", "emailVerified": true,
+      "firstName": "Sai", "lastName": "Charan",
+      "credentials": [{ "type": "password", "value": "12345678", "temporary": false }],
+      "realmRoles": ["fincore-viewer"] },
+    { "username": "analyst", "enabled": true, "email": "analyst@fincore.test", "emailVerified": true,
+      "firstName": "Ana", "lastName": "Analyst",
+      "credentials": [{ "type": "password", "value": "analyst", "temporary": false }],
+      "realmRoles": ["fincore-risk-analyst"] },
+    { "username": "admin", "enabled": true, "email": "admin@fincore.test", "emailVerified": true,
+      "firstName": "Sai", "lastName": "admin",
+      "credentials": [{ "type": "password", "value": "admin", "temporary": false }],
+      "realmRoles": ["fincore-finance-ops"] },
+    { "username": "nobody", "enabled": true, "email": "nobody@fincore.test", "emailVerified": true,
+      "firstName": "No", "lastName": "Role",
+      "credentials": [{ "type": "password", "value": "nobody", "temporary": false }] },
+    { "username": "service-account-fincore-loadtest", "enabled": true,
+      "serviceAccountClientId": "fincore-loadtest", "realmRoles": ["fincore-viewer"] }
+  ]
+}

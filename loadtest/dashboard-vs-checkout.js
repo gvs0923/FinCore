@@ -7,13 +7,13 @@
 // conventions (rollup tables, non-locking reads, BFF cache) predict ~no delta.
 //
 //   k6 run loadtest/dashboard-vs-checkout.js
-//   BFF=http://localhost:8089 ADMIN_TOKEN=dev-admin-token k6 run ...
+//   BFF=http://localhost:8089 KEYCLOAK=http://localhost:8180 k6 run ...
 
 import http from "k6/http";
 import { check, sleep } from "k6";
 
 const BFF = __ENV.BFF || "http://localhost:8089";
-const ADMIN_TOKEN = __ENV.ADMIN_TOKEN || "dev-admin-token";
+const KC = __ENV.KEYCLOAK || "http://localhost:8180";
 const PHASE = "1m";
 
 export const options = {
@@ -52,6 +52,7 @@ export const options = {
     "http_req_duration{flow:checkout,phase:baseline}": ["p(95)<1000"],
     "http_req_duration{flow:checkout,phase:contended}": ["p(95)<1000"],
     "checks{flow:checkout}": ["rate>0.99"],
+    "checks{flow:admin}": ["rate>0.99"],
   },
 };
 
@@ -77,9 +78,24 @@ export function checkout() {
   http.get(`${BFF}/v1/checkout/sessions/${id}`, { tags: { ...tags, name: "poll" } });
 }
 
-export function adminPoll() {
+export function setup() {
+  const res = http.post(`${KC}/realms/fincore/protocol/openid-connect/token`, {
+    grant_type: "client_credentials",
+    client_id: "fincore-loadtest",
+    client_secret: __ENV.LOADTEST_CLIENT_SECRET || "dev-loadtest-secret",
+  }, { tags: { flow: "auth", name: "machine-token" } });
+  if (res.status !== 200) throw new Error(`token request failed: ${res.status}`);
+  const token = res.json("access_token");
+  const lifetime = Number(res.json("expires_in"));
+  if (typeof token !== "string" || !token || !Number.isFinite(lifetime) || lifetime < 150) {
+    throw new Error("Load-test token missing or expires before the two-minute test finishes");
+  }
+  return { token };
+}
+
+export function adminPoll(data) {
   const tags = { flow: "admin" };
-  const params = { headers: { "X-Admin-Token": ADMIN_TOKEN }, tags };
+  const params = { headers: { Authorization: `Bearer ${data.token}` }, tags };
   const to = new Date().toISOString();
   const from = new Date(Date.now() - 24 * 3600_000).toISOString();
   const range = `from=${from}&to=${to}`;

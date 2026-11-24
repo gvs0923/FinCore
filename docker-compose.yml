@@ -1,3 +1,23 @@
+x-jvm-env: &jvm-env
+  SERVER_ADDRESS: 0.0.0.0
+  MANAGEMENT_SERVER_PORT: "8081"
+  MANAGEMENT_SERVER_ADDRESS: 0.0.0.0
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fincore
+  SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:19092
+  SPRING_DATA_REDIS_HOST: redis
+  MANAGEMENT_OPENTELEMETRY_TRACING_EXPORT_OTLP_ENDPOINT: http://jaeger:4318/v1/traces
+  FINCORE_TRACING_EXPORT_ENABLED: "true"
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError ${FINCORE_JVM_EXTRA:-}"
+
+x-jvm: &jvm
+  profiles: [apps]
+  restart: unless-stopped
+  mem_limit: 768m
+  depends_on:
+    postgres: { condition: service_healthy }
+    kafka: { condition: service_started }
+    redis: { condition: service_started }
+
 services:
   postgres:
     image: postgres:15-alpine
@@ -6,42 +26,164 @@ services:
       POSTGRES_USER: fincore
       POSTGRES_PASSWORD: fincore
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - fincore-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U fincore -d fincore"]
+      interval: 5s
+      retries: 20
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
 
   kafka:
     image: apache/kafka:3.8.1
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     environment:
       # KRaft mode (no ZooKeeper needed)
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:19092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:19092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       CLUSTER_ID: fincore-local-dev-cluster-001
       # JDK in the image SIGILLs on SVE under Colima vz on Apple Silicon
-      JAVA_TOOL_OPTIONS: "-XX:UseSVE=0"
+      JAVA_TOOL_OPTIONS: "${FINCORE_JVM_EXTRA:-}"
 
   kafka-ui:
     image: provectuslabs/kafka-ui:v0.7.2
     ports:
-      - "8088:8080"
+      - "127.0.0.1:8088:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: fincore-local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:19092
     depends_on:
       - kafka
 
+  jaeger:
+    image: jaegertracing/jaeger:2.5.0
+    ports:
+      - "127.0.0.1:16686:16686"   # UI
+      - "127.0.0.1:4318:4318"     # OTLP/HTTP
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    ports:
+      - "127.0.0.1:9099:9090"     # 9090 is ledger-service on the host
+    volumes:
+      - ./infra/prometheus:/etc/prometheus:ro
+    # Services run on the host (gradle bootRun), not in containers.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1   # pin a verified tag
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # The issuer the BROWSER sees. Containers reach Keycloak at keycloak:8080
+      # for back-channel calls (token, JWKS); BACKCHANNEL_DYNAMIC allows that.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      # JDK in the image SIGILLs on SVE under Colima vz on Apple Silicon
+      JAVA_OPTS_APPEND: ${FINCORE_JVM_EXTRA:-}
+    ports:
+      - "127.0.0.1:8180:8080"
+    volumes:
+      - ./infra/keycloak:/opt/keycloak/data/import:ro
+
+  ledger-service:
+    <<: *jvm
+    image: fincore/ledger-service:dev
+    build: { context: ., dockerfile: docker/jvm.Dockerfile, args: { MODULE: ledger-service } }
+    environment: { <<: *jvm-env }
+
+  payment-service:
+    <<: *jvm
+    image: fincore/payment-service:dev
+    build: { context: ., dockerfile: docker/jvm.Dockerfile, args: { MODULE: payment-service } }
+    environment:
+      <<: *jvm-env
+      FINCORE_RISK_BASEURL: http://risk-service:9096
+
+  risk-service:
+    <<: *jvm
+    image: fincore/risk-service:dev
+    build: { context: ., dockerfile: docker/jvm.Dockerfile, args: { MODULE: risk-service } }
+    environment:
+      <<: *jvm-env
+      FINCORE_RISK_PSEUDONYM_KEY: ${FINCORE_RISK_PSEUDONYM_KEY:-dev-only-pseudonym-key}
+
+  metrics-projection:
+    <<: *jvm
+    image: fincore/metrics-projection:dev
+    build: { context: ., dockerfile: docker/jvm.Dockerfile, args: { MODULE: metrics-projection } }
+    environment: { <<: *jvm-env }
+
+  notification-service:
+    <<: *jvm
+    image: fincore/notification-service:dev
+    build: { context: ., dockerfile: docker/jvm.Dockerfile, args: { MODULE: notification-service } }
+    environment: { <<: *jvm-env }
+
+  settlement-service:
+    <<: *jvm
+    image: fincore/settlement-service:dev
+    build: { context: ., dockerfile: docker/jvm.Dockerfile, args: { MODULE: settlement-service } }
+    environment:
+      <<: *jvm-env
+      FINCORE_SETTLEMENT_REPORT_INBOX: /data/processor-reports
+    volumes:
+      - settlement-inbox:/data/processor-reports
+
+  checkout-bff:
+    <<: *jvm
+    image: fincore/checkout-bff:dev
+    build: { context: ., dockerfile: docker/jvm.Dockerfile, args: { MODULE: checkout-bff } }
+    environment:
+      <<: *jvm-env
+      SPRING_PROFILES_ACTIVE: local
+      FINCORE_PAYMENT_BASEURL: http://payment-service:9091
+      FINCORE_LEDGER_BASEURL: http://ledger-service:9090
+      FINCORE_METRICS_BASEURL: http://metrics-projection:9095
+      FINCORE_RISK_BASEURL: http://risk-service:9096
+      FINCORE_SETTLEMENT_BASEURL: http://settlement-service:9097
+      FINCORE_CORS_ALLOWEDORIGIN: http://localhost:8080
+      FINCORE_PUBLIC_BASE_URL: http://localhost:8080
+      FINCORE_OIDC_BACKCHANNELBASE: http://keycloak:8080/realms/fincore
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_started }
+      keycloak: { condition: service_started }
+
+  web:
+    profiles: [apps]
+    image: fincore/web:dev
+    build: { context: ./storefront-web }
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on: [checkout-bff]
+
 volumes:
   fincore-postgres-data:
+  settlement-inbox:

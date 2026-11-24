@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+z.config({ jitless: true });
+
 function isValidLuhn(digits: string): boolean {
   let sum = 0;
   let shouldDouble = false;

@@ -9,7 +9,7 @@ import {
   type CheckoutFormInput,
   type CheckoutFormValues,
 } from "../checkoutSchema";
-import { getSession, paySession } from "../api/client";
+import { ApiError, getSession, paySession } from "../api/client";
 import {
   BRAND_LABEL,
   detectCardBrand,
@@ -25,6 +25,7 @@ export default function CheckoutPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [supportRef, setSupportRef] = useState<string | null>(null);
   const [country, setCountry] = useState("US");
 
   const { data: session } = useQuery({
@@ -58,6 +59,7 @@ export default function CheckoutPage() {
   async function onSubmit(values: CheckoutFormValues) {
     if (!sessionId) return;
     setSubmitError(null);
+    setSupportRef(null);
     try {
       const cardLast4 = values.cardNumber.slice(-4);
       await paySession(sessionId, values.cardNumber, brand, cardLast4, {
@@ -70,6 +72,7 @@ export default function CheckoutPage() {
       navigate(`/result/${sessionId}`);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : "Payment failed");
+      setSupportRef(e instanceof ApiError ? e.traceId.slice(0, 12) : null);
     }
   }
 
@@ -182,7 +185,12 @@ export default function CheckoutPage() {
             >
               {isSubmitting ? "Processing\u2026" : total ? `Pay ${total}` : "Pay"}
             </button>
-            {submitError && <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>}
+            {submitError && (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {submitError}
+                {supportRef && <span className="block text-xs opacity-75">Support reference: {supportRef}</span>}
+              </p>
+            )}
             <p className="text-xs text-slate-500">
               This demo uses a browser ID stored for reuse, your timezone,
               primary request language, declared country, and connection address

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-bff
+  labels: { app.kubernetes.io/name: checkout-bff, app.kubernetes.io/part-of: fincore }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: checkout-bff }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: checkout-bff, app.kubernetes.io/part-of: fincore, fincore/tier: edge }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: fincore/checkout-bff:dev
+          imagePullPolicy: Never
+          ports:
+            - { name: http, containerPort: 8089 }
+            - { name: management, containerPort: 8081 }
+          envFrom:
+            - configMapRef: { name: fincore-jvm-env }
+            - secretRef: { name: fincore-secrets }
+          env:
+            - { name: SPRING_PROFILES_ACTIVE, value: local }
+            - { name: FINCORE_PAYMENT_BASEURL, value: "http://payment-service:9091" }
+            - { name: FINCORE_LEDGER_BASEURL, value: "http://ledger-service:9090" }
+            - { name: FINCORE_METRICS_BASEURL, value: "http://metrics-projection:9095" }
+            - { name: FINCORE_RISK_BASEURL, value: "http://risk-service:9096" }
+            - { name: FINCORE_SETTLEMENT_BASEURL, value: "http://settlement-service:9097" }
+            - { name: FINCORE_OIDC_BACKCHANNELBASE, value: "http://keycloak:8080/realms/fincore" }
+            - { name: FINCORE_PUBLIC_BASE_URL, value: "http://localhost:8080" }
+            - { name: FINCORE_CORS_ALLOWEDORIGIN, value: "http://localhost:8080" }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: management }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: management }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkout-bff
+spec:
+  selector: { app.kubernetes.io/name: checkout-bff }
+  ports:
+    - { name: http, port: 8089, targetPort: http }
+    - { name: management, port: 8081, targetPort: management }

@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.fincore.settlement.audit.Actor;
 
 @Testcontainers
 @SpringBootTest(properties = {
@@ -71,6 +72,16 @@ class SettlementBatchIT {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private org.springframework.context.ApplicationContext context;
+
+    @Test
+    void backgroundPollersAreDisabledInIntegrationTests() {
+        assertTrue(context.getBeansOfType(com.fincore.settlement.outbox.OutboxPublisher.class).isEmpty());
+        assertTrue(context.getBeansOfType(UnbatchedSweep.class).isEmpty());
+        assertTrue(context.getBeansOfType(SettlementJobScheduler.class).isEmpty());
+    }
+
     @Test
     void calculatesTotalsAndPersistsFeeSnapshots() {
         String merchant = merchant();
@@ -79,7 +90,7 @@ class SettlementBatchIT {
         capture(merchant, 5_000, "2026-01-10T11:00:00Z");
 
         BatchResponse batch = batchService.createOrRefresh(
-                merchant, "USD", DAY);
+                merchant, "USD", DAY, Actor.system("test"));
 
         assertEquals("OPEN", batch.status());
         assertEquals(2, batch.captureCount());
@@ -102,10 +113,10 @@ class SettlementBatchIT {
         capture(merchant, 10_000, "2026-01-10T10:00:00Z");
 
         BatchResponse first = batchService.createOrRefresh(
-                merchant, "USD", DAY);
+                merchant, "USD", DAY, Actor.system("test"));
 
         BatchResponse second = batchService.createOrRefresh(
-                merchant, "USD", DAY);
+                merchant, "USD", DAY, Actor.system("test"));
 
         assertEquals(first.id(), second.id());
         assertEquals(1, second.captureCount());
@@ -120,12 +131,12 @@ class SettlementBatchIT {
         capture(merchant, 10_000, "2026-01-10T10:00:00Z");
 
         BatchResponse first = batchService.createOrRefresh(
-                merchant, "USD", DAY);
+                merchant, "USD", DAY, Actor.system("test"));
 
         capture(merchant, 5_000, "2026-01-10T11:00:00Z");
 
         BatchResponse refreshed = batchService.createOrRefresh(
-                merchant, "USD", DAY);
+                merchant, "USD", DAY, Actor.system("test"));
 
         assertEquals(first.id(), refreshed.id());
         assertEquals(2, refreshed.captureCount());
@@ -143,7 +154,7 @@ class SettlementBatchIT {
         capture(merchant, 4_000, "2026-01-11T00:00:00Z");
 
         BatchResponse batch = batchService.createOrRefresh(
-                merchant, "USD", DAY);
+                merchant, "USD", DAY, Actor.system("test"));
 
         assertEquals(2, batch.captureCount());
         assertEquals(5_000, batch.grossMinor());
@@ -158,7 +169,7 @@ class SettlementBatchIT {
         capture(secondMerchant, 20_000, "2026-01-10T10:00:00Z");
 
         BatchResponse batch = batchService.createOrRefresh(
-                firstMerchant, "USD", DAY);
+                firstMerchant, "USD", DAY, Actor.system("test"));
 
         assertEquals(1, batch.captureCount());
         assertEquals(10_000, batch.grossMinor());
@@ -169,11 +180,11 @@ class SettlementBatchIT {
         String merchant = merchant();
         capture(merchant, 10_000, "2026-01-10T10:00:00Z");
         BatchResponse batch = batchService.createOrRefresh(
-                merchant, "USD", DAY);
+                merchant, "USD", DAY, Actor.system("test"));
 
         // OPEN batch cannot pay out
         assertThrows(ResponseStatusException.class,
-                () -> batchService.payout(batch.id()));
+                () -> batchService.payout(batch.id(), Actor.system("test")));
 
         // Simulate a clean reconciliation directly (real flow tested
         // in ReconciliationIT — here we test payout's guard)
@@ -181,12 +192,12 @@ class SettlementBatchIT {
                 UPDATE settlement_batches SET status = 'RECONCILED'
                 WHERE id = ?""", batch.id());
 
-        BatchResponse paid = batchService.payout(batch.id());
+        BatchResponse paid = batchService.payout(batch.id(), Actor.system("test"));
         assertEquals("PAID_OUT", paid.status());
 
         // Second payout → 409 (idempotent by state guard)
         assertThrows(ResponseStatusException.class,
-                () -> batchService.payout(batch.id()));
+                () -> batchService.payout(batch.id(), Actor.system("test")));
 
         // Exactly one outbox event queued for the ledger
         Long events = jdbc.queryForObject("""
@@ -211,7 +222,7 @@ class SettlementBatchIT {
                     throw new IllegalStateException("Start signal timed out");
                 }
                 return batchService.createOrRefresh(
-                        merchant, "USD", DAY);
+                        merchant, "USD", DAY, Actor.system("test"));
             });
 
             var second = executor.submit(() -> {
@@ -220,7 +231,7 @@ class SettlementBatchIT {
                     throw new IllegalStateException("Start signal timed out");
                 }
                 return batchService.createOrRefresh(
-                        merchant, "USD", DAY);
+                        merchant, "USD", DAY, Actor.system("test"));
             });
 
             try {
@@ -262,7 +273,7 @@ class SettlementBatchIT {
                 () -> batchService.createOrRefresh(
                         merchant(),
                         "USD",
-                        LocalDate.of(9999, 1, 1)));
+                        LocalDate.of(9999, 1, 1), Actor.system("test")));
 
         assertEquals(400, exception.getStatusCode().value());
     }
@@ -272,7 +283,7 @@ class SettlementBatchIT {
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
                 () -> batchService.createOrRefresh(
-                        merchant(), "EUR", DAY));
+                        merchant(), "EUR", DAY, Actor.system("test")));
 
         assertEquals(400, exception.getStatusCode().value());
     }
@@ -280,7 +291,7 @@ class SettlementBatchIT {
     @Test
     void rejectsInvalidPagination() {
         BatchResponse batch = batchService.createOrRefresh(
-                merchant(), "USD", DAY);
+                merchant(), "USD", DAY, Actor.system("test"));
 
         assertThrows(
                 ResponseStatusException.class,

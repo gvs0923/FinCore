@@ -41,8 +41,7 @@ public final class BatchModels {
         public record RefundRequest(
             UUID paymentId,
             String idempotencyKey,
-            String reason,
-            String actor) {
+            String reason) {
     }
 
     public record RefundResponse(

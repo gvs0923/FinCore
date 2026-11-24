@@ -23,6 +23,15 @@ subprojects {
         }
     }
 
+    plugins.withId('org.springframework.boot') {
+        dependencies {
+            implementation 'org.springframework.boot:spring-boot-starter-actuator'
+            implementation 'org.springframework.boot:spring-boot-starter-opentelemetry'
+            implementation 'org.springframework.boot:spring-boot-starter-restclient'
+            runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+        }
+    }
+
     tasks.named('test') {
         useJUnitPlatform()
 

@@ -1,0 +1,6 @@
+<configuration>
+    <conversionRule conversionWord="m" class="com.fincore.checkout.logging.PanMaskingConverter"/>
+    <conversionRule conversionWord="msg" class="com.fincore.checkout.logging.PanMaskingConverter"/>
+    <conversionRule conversionWord="message" class="com.fincore.checkout.logging.PanMaskingConverter"/>
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+</configuration>
