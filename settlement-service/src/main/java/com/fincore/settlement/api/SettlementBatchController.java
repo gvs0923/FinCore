@@ -3,6 +3,7 @@ package com.fincore.settlement.api;
 import com.fincore.settlement.api.BatchModels.BatchItemResponse;
 import com.fincore.settlement.api.BatchModels.BatchResponse;
 import com.fincore.settlement.api.BatchModels.CreateBatchRequest;
+import com.fincore.settlement.audit.Actor;
 import com.fincore.settlement.service.SettlementBatchService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,11 +29,12 @@ public class SettlementBatchController {
 
     @PostMapping
     public BatchResponse create(
-            @RequestBody CreateBatchRequest request) {
+            @RequestBody CreateBatchRequest request, Actor actor) {
         return batchService.createOrRefresh(
                 request.merchantId(),
                 request.currency(),
-                request.settlementDate());
+                request.settlementDate(),
+                actor);
     }
 
     @GetMapping("/{batchId}")
@@ -58,8 +60,8 @@ public class SettlementBatchController {
 
     @PostMapping("/{batchId}/payout")
     public BatchResponse payout(
-            @PathVariable("batchId") UUID batchId) {
-        return batchService.payout(batchId);
+            @PathVariable("batchId") UUID batchId, Actor actor) {
+        return batchService.payout(batchId, actor);
     }
 
     @GetMapping

@@ -1,6 +1,7 @@
 package com.fincore.settlement.service;
 
 import com.fincore.settlement.api.BatchModels.BatchResponse;
+import com.fincore.settlement.audit.Actor;
 import com.fincore.settlement.reconciliation.ProcessorReportCsv;
 import com.fincore.settlement.reconciliation.ReconciliationModels.RunResponse;
 import org.slf4j.Logger;
@@ -74,7 +75,8 @@ public class SettlementJobs {
         List<BatchResponse> batches = new ArrayList<>();
         for (Object[] s : scopes) {
             try {
-                BatchResponse batch = batchService.createOrRefresh((String) s[0], (String) s[1], (LocalDate) s[2]);
+                BatchResponse batch = batchService.createOrRefresh((String) s[0], (String) s[1],
+                        (LocalDate) s[2], Actor.system("daily-batch-job"));
                 if ("OPEN".equals(batch.status())) {
                     batches.add(batch);
                 }
@@ -137,8 +139,9 @@ public class SettlementJobs {
             throw new IllegalArgumentException("Report exceeds 2 MB");
         }
         var rows = ProcessorReportCsv.parse(Files.readString(file, StandardCharsets.UTF_8));
-        BatchResponse batch = batchService.createOrRefresh(m.group(1), m.group(2), LocalDate.parse(m.group(3)));
-        return reconciliationService.importReport(batch.id(), name, rows);
+        BatchResponse batch = batchService.createOrRefresh(m.group(1), m.group(2),
+                LocalDate.parse(m.group(3)), Actor.system("report-inbox"));
+        return reconciliationService.importReport(batch.id(), name, rows, Actor.system("report-inbox"));
     }
 
     private static String reason(Exception e) {

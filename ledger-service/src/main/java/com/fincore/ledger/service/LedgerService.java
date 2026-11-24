@@ -5,6 +5,7 @@ import com.fincore.ledger.domain.AccountBalance;
 import com.fincore.ledger.domain.EntryType;
 import com.fincore.ledger.domain.LedgerEntry;
 import com.fincore.ledger.domain.LedgerTransaction;
+import com.fincore.ledger.outbox.OutboxTrace;
 import com.fincore.ledger.repository.AccountBalanceRepository;
 import com.fincore.ledger.repository.AccountRepository;
 import com.fincore.ledger.repository.LedgerEntryRepository;
@@ -36,19 +37,22 @@ public class LedgerService {
     private final AccountBalanceRepository balanceRepository;
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
+    private final OutboxTrace outboxTrace;
 
     public LedgerService(AccountRepository accountRepository,
                           LedgerTransactionRepository transactionRepository,
                           LedgerEntryRepository entryRepository,
                           AccountBalanceRepository balanceRepository,
                           JdbcTemplate jdbc,
-                          ObjectMapper objectMapper) {
+                          ObjectMapper objectMapper,
+                          OutboxTrace outboxTrace) {
         this.accountRepository = accountRepository;
         this.transactionRepository = transactionRepository;
         this.entryRepository = entryRepository;
         this.balanceRepository = balanceRepository;
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.outboxTrace = outboxTrace;
     }
 
     /**
@@ -102,11 +106,13 @@ public class LedgerService {
 
         // After saving all entries and updating balances, write to outbox
         jdbc.update("""
-                INSERT INTO ledger_outbox_events (aggregate_type, aggregate_id, event_type, payload)
-                VALUES ('transaction', ?, 'ledger.transaction.posted', ?::jsonb)
+                INSERT INTO ledger_outbox_events
+                    (aggregate_type, aggregate_id, event_type, payload, traceparent)
+                VALUES ('transaction', ?, 'ledger.transaction.posted', ?::jsonb, ?)
                 """,
                 transaction.getId().toString(),
-                buildTransactionPayload(transaction, savedEntries));
+                buildTransactionPayload(transaction, savedEntries),
+                outboxTrace.currentTraceparent());
 
         return transaction;
     }

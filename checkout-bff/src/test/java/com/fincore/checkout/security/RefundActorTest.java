@@ -24,9 +24,11 @@ class RefundActorTest {
 
     @Test
     void refundUsesTheAuthenticatedSubjectNotAStubActor() throws Exception {
+        var actorHeader = new AtomicReference<String>();
         var body = new AtomicReference<String>();
         var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/internal/settlement/refunds", exchange -> {
+            actorHeader.set(exchange.getRequestHeaders().getFirst(Actor.SUBJECT_HEADER));
             body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             byte[] response = ("{\"id\":\"" + UUID.randomUUID() + "\",\"paymentId\":\"" + UUID.randomUUID()
@@ -43,10 +45,13 @@ class RefundActorTest {
             var principal = new DefaultOidcUser(List.of(), token);
             SecurityContextHolder.getContext().setAuthentication(
                     new OAuth2AuthenticationToken(principal, principal.getAuthorities(), "keycloak"));
-            var client = new SettlementClient("http://127.0.0.1:" + server.getAddress().getPort(), RestClient.builder());
+            var builder = RestClient.builder();
+            new ActorPropagation().actorHeaders().customize(builder);
+            var client = new SettlementClient("http://127.0.0.1:" + server.getAddress().getPort(), builder);
             client.refund(new BackOfficeViews.RefundRequest(UUID.randomUUID(), UUID.randomUUID().toString(), "test"));
-            assertTrue(body.get().contains("\"actor\":\"user:operator-123\""));
-            assertFalse(body.get().contains("local-admin"));
+            // Identity travels in the trusted header, never in the request body.
+            assertEquals("user:operator-123", actorHeader.get());
+            assertFalse(body.get().contains("actor"));
         } finally {
             SecurityContextHolder.clearContext();
             server.stop(0);

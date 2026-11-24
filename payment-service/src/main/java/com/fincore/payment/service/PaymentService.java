@@ -1,5 +1,7 @@
 package com.fincore.payment.service;
 
+import com.fincore.payment.audit.Actor;
+import com.fincore.payment.audit.AuditLog;
 import com.fincore.payment.client.PaymentProcessor;
 import com.fincore.payment.client.ProcessorResult;
 import com.fincore.payment.client.RiskClient;
@@ -14,8 +16,11 @@ import com.fincore.payment.repository.PaymentAttemptRepository;
 import com.fincore.payment.repository.PaymentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -40,6 +45,8 @@ public class PaymentService {
     private final OutboxEventRepository outboxEventRepository;
     private final PaymentProcessor paymentProcessor;
     private final RiskClient riskClient;
+    private final AuditLog audit;
+    private final MeterRegistry meterRegistry;
     private final ObjectMapper riskJson = new ObjectMapper();
 
     public PaymentService(PaymentRepository paymentRepository,
@@ -47,13 +54,28 @@ public class PaymentService {
                           IdempotencyKeyRepository idempotencyKeyRepository,
                           OutboxEventRepository outboxEventRepository,
                           PaymentProcessor paymentProcessor,
-                        RiskClient riskClient) {
+                          RiskClient riskClient,
+                          AuditLog audit,
+                          MeterRegistry meterRegistry) {
         this.paymentRepository = paymentRepository;
         this.attemptRepository = attemptRepository;
         this.idempotencyKeyRepository = idempotencyKeyRepository;
         this.outboxEventRepository = outboxEventRepository;
         this.paymentProcessor = paymentProcessor;
         this.riskClient = riskClient;
+        this.audit = audit;
+        this.meterRegistry = meterRegistry;
+    }
+
+    /** Count outcomes only after commit — a rolled-back payment is no outcome. */
+    private void countOutcome(Payment payment) {
+        String outcome = payment.getStatus().name().toLowerCase();
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                meterRegistry.counter("fincore.payments.outcome", "outcome", outcome).increment();
+            }
+        });
     }
 
     @Transactional
@@ -124,6 +146,7 @@ public class PaymentService {
             payment.markDeclined(authResult.declineReason());
             paymentRepository.save(payment);
             publishEvent(payment, "payment.declined");
+            countOutcome(payment);
             log.info("Payment {} declined: {}",
                     payment.getId(), authResult.declineReason());
             return payment;
@@ -145,6 +168,7 @@ public class PaymentService {
             payment.markDeclined("RISK_BLOCK");
             paymentRepository.save(payment);
             publishEvent(payment, "payment.declined");
+            countOutcome(payment);
             log.info("Payment {} blocked by risk engine", payment.getId());
             return payment;
         }
@@ -178,6 +202,7 @@ public class PaymentService {
         payment.markCaptured(ledgerRef);
         paymentRepository.save(payment);
         publishCapturedEvent(payment, capResult.processorRef());
+        countOutcome(payment);
         log.info("Payment {} captured, outbox event written",
                 payment.getId());
 
@@ -258,7 +283,7 @@ public class PaymentService {
      * reference; reject → decline. Internal use only (admin queue).
      */
     @Transactional
-    public Payment resolveReviewedPayment(UUID paymentId, boolean approve) {
+    public Payment resolveReviewedPayment(UUID paymentId, boolean approve, Actor actor) {
         Payment payment = paymentRepository.findByIdForUpdate(paymentId).orElseThrow(
                 () -> new PaymentNotFoundException(paymentId));
 
@@ -272,6 +297,9 @@ public class PaymentService {
             payment.markDeclined("RISK_REVIEW_REJECTED");
             paymentRepository.save(payment);
             publishEvent(payment, "payment.declined");
+            countOutcome(payment);
+            audit.record(actor, "REVIEW_REJECTED", "payment", paymentId,
+                    Map.of("resultStatus", payment.getStatus().name()));
             log.info("Reviewed payment {} rejected by analyst", paymentId);
             return payment;
         }
@@ -301,6 +329,9 @@ public class PaymentService {
         payment.markCaptured("payment:" + paymentId);
         paymentRepository.save(payment);
         publishCapturedEvent(payment, capResult.processorRef());
+        countOutcome(payment);
+        audit.record(actor, "REVIEW_APPROVED", "payment", paymentId,
+                Map.of("resultStatus", payment.getStatus().name()));
         log.info("Reviewed payment {} approved and captured", paymentId);
         return payment;
     }

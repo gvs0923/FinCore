@@ -83,9 +83,9 @@ public class SettlementClient {
 
     public RefundResult refund(RefundRequest request) {
         return restClient.post().uri("/internal/settlement/refunds")
-                .body(Map.of("paymentId", request.paymentId(), "idempotencyKey", request.idempotencyKey(),
-                        "reason", request.reason(), "actor",
-                        com.fincore.checkout.security.Actor.current().orElseThrow().subject()))
+                .body(Map.of("paymentId", request.paymentId(),
+                        "idempotencyKey", request.idempotencyKey(),
+                        "reason", request.reason()))
                 .retrieve().body(RefundResult.class);
     }
 }
