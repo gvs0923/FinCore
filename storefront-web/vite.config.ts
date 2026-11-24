@@ -56,7 +56,10 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     proxy: {
-      '/v1' : 'http://localhost:8089',
+      '/v1': 'http://localhost:8089',
+      '/oauth2': 'http://localhost:8089',
+      '/login/oauth2': 'http://localhost:8089',
+      '/logout': 'http://localhost:8089',
     },
   },
 })

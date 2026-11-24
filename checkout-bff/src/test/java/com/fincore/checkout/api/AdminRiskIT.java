@@ -8,8 +8,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.util.List;
@@ -20,6 +23,8 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -39,6 +44,12 @@ class AdminRiskIT {
     @MockitoBean
     private RiskAdminClient risk;
 
+    private static RequestPostProcessor as(String... roles) {
+        List<GrantedAuthority> authorities = java.util.Arrays.stream(roles)
+                .<GrantedAuthority>map(r -> new SimpleGrantedAuthority("ROLE_" + r)).toList();
+        return oidcLogin().authorities(authorities);
+    }
+
     @Test
     void queueRequiresAuthentication() throws Exception {
         mvc.perform(get("/v1/admin/risk/queue"))
@@ -51,6 +62,7 @@ class AdminRiskIT {
     void resolutionRequiresAuthentication() throws Exception {
         mvc.perform(post("/v1/admin/risk/"
                         + UUID.randomUUID() + "/resolve")
+                        .with(csrf())
                         .param("action", "approve"))
                 .andExpect(status().isUnauthorized());
 
@@ -69,7 +81,7 @@ class AdminRiskIT {
                 .thenThrow(new ResourceAccessException("Unavailable"));
 
         mvc.perform(get("/v1/admin/risk/queue")
-                        .header("X-Admin-Token", "test-admin-token"))
+                        .with(as("VIEWER", "RISK_ANALYST")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].payment_id").value(id))
                 .andExpect(jsonPath("$[0].score").value(-1))
@@ -89,7 +101,8 @@ class AdminRiskIT {
                 .when(risk).markResolved(id, "approve");
 
         mvc.perform(post("/v1/admin/risk/" + id + "/resolve")
-                        .header("X-Admin-Token", "test-admin-token")
+                        .with(as("VIEWER", "RISK_ANALYST"))
+                        .with(csrf())
                         .param("action", "approve"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CAPTURED"));

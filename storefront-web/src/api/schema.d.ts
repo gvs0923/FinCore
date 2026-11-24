@@ -308,6 +308,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/ledger/transactions/{reference}": {
         parameters: {
             query?: never;
@@ -587,6 +603,10 @@ export interface components {
             cardLast4?: string;
             /** Format: date-time */
             createdAt?: string;
+        };
+        AdminMe: {
+            name?: string;
+            roles?: string[];
         };
         LedgerEntryRow: {
             /** Format: uuid */
@@ -1086,6 +1106,26 @@ export interface operations {
                     "*/*": {
                         [key: string]: unknown;
                     }[];
+                };
+            };
+        };
+    };
+    me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AdminMe"];
                 };
             };
         };

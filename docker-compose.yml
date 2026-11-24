@@ -43,5 +43,23 @@ services:
     depends_on:
       - kafka
 
+  
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1   # pin a verified tag
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # The issuer the BROWSER sees. Containers reach Keycloak at keycloak:8080
+      # for back-channel calls (token, JWKS); BACKCHANNEL_DYNAMIC allows that.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      # JDK in the image SIGILLs on SVE under Colima vz on Apple Silicon
+      JAVA_OPTS_APPEND: ${FINCORE_JVM_EXTRA:--XX:UseSVE=0}
+    ports:
+      - "8180:8080"
+    volumes:
+      - ./infra/keycloak:/opt/keycloak/data/import:ro
+
 volumes:
   fincore-postgres-data:
