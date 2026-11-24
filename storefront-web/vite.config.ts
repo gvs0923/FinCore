@@ -62,6 +62,7 @@ export default defineConfig(({ command, isPreview }) => ({
     },
   }],
   build: {
+    manifest: true,
     rollupOptions: {
       input: {
         main: resolve(import.meta.dirname, 'index.html'),

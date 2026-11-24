@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 
 // The session cookie rides along automatically via the project's storageState;
 // mutating calls only need the XSRF token from that same session.
@@ -18,7 +18,8 @@ test("admin refunds a captured order with one audited reversing journal", async 
   test.setTimeout(150_000);
   const card = "4242424242424242";
   const fingerprint = createHash("sha256").update(card).digest("hex").slice(0, 16);
-  const keys = [`risk:card:${fingerprint}`, "risk:ip:127.0.0.1", "risk:ip:0:0:0:0:0:0:0:1", "risk:ip:::1"];
+  const keys = [`risk:card:${fingerprint}`, ...["127.0.0.1", "0:0:0:0:0:0:0:1", "::1"].map(ip =>
+    `risk:ip:${createHmac("sha256", process.env.FINCORE_RISK_PSEUDONYM_KEY ?? "dev-only-pseudonym-key").update("ip\0").update(ip).digest("hex").slice(0, 32)}`)];
   const ttls = keys.map(key => Number(execFileSync("docker", ["exec", "fincore-redis-1", "redis-cli", "TTL", key], { encoding: "utf8" }).trim()));
   expect(ttls.every(ttl => Number.isFinite(ttl) && ttl !== -1)).toBe(true);
   const remaining = Math.max(...ttls);

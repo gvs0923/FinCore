@@ -25,34 +25,59 @@ available documentation.
 
 ## Local development
 
-Prerequisites: Docker (this project was set up against [Colima](https://github.com/abiosoft/colima)
-rather than Docker Desktop), Gradle (`brew install gradle` — we use the
-system Gradle install rather than the wrapper here, see note below), Java 21
-(via Gradle toolchain).
+Prerequisites: Docker Engine or Docker Desktop (Colima is also supported),
+Docker Compose v2, Docker Buildx, Java 21, Gradle 9.7.1, and Node.js 22 LTS
+with npm. No company VPN, proxy, or private certificate is required. Keep TLS
+verification enabled; public registry certificate errors are an environment
+problem, not a project prerequisite. No Gradle wrapper is currently committed.
 
 ```bash
-docker-compose up -d       # Postgres, Redis (Kafka added in Phase 3)
-gradle build               # build all modules
+docker compose version
+docker buildx version
+docker compose up -d
+gradle build
 ```
 
-### Setup notes specific to this machine
+For a fully containerized local demo:
 
-- **Gradle wrapper vs. system Gradle**: on this network, the Gradle wrapper's
-  distribution download (multi-hop redirect through GitHub release assets)
-  fails TLS validation even though direct Maven Central access works fine.
-  We install Gradle via Homebrew and invoke `gradle` directly instead of
-  `./gradlew`.
-- **`GRADLE_OPTS` for TLS**: some HTTPS calls made by the JVM need to trust
-  certs already trusted by macOS (e.g. a network-level TLS-intercepting
-  proxy). Rather than modifying Java's global cacerts, point the JVM at the
-  macOS Keychain's trust store for Gradle invocations:
-  ```bash
-  export GRADLE_OPTS="-Djavax.net.ssl.trustStoreType=KeychainStore -Djavax.net.ssl.trustStore=NONE"
-  ```
-- **Colima + Testcontainers**: `build.gradle` sets `DOCKER_HOST` (pointing at
-  Colima's socket) and `TESTCONTAINERS_RYUK_DISABLED=true` (Ryuk has known
-  startup issues under Colima's VM) as environment for the `test` task, so
-  integration tests work out of the box — no global machine config needed.
+```bash
+docker compose --profile apps up -d --build
+```
+
+Open `http://localhost:8080`. Demo admin logins are `charan` / `12345678`
+(viewer), `admin` / `admin` (finance), `analyst` / `analyst`, and
+`nobody` / `nobody` (no admin role). These are local test accounts only.
+On Apple Silicon with an affected Colima VM, set
+`FINCORE_JVM_EXTRA=-XX:UseSVE=0` in your untracked local `.env`.
+Do not recreate an existing Keycloak container without backing up its state:
+its local database is container-local, and realm imports do not update an
+existing realm. Never use `docker compose down -v` to upgrade a local stack.
+
+For host development, start each service's executable JAR with Java 21 after
+`gradle build`, then run `npm ci && npm run dev` in `storefront-web` and open
+`http://127.0.0.1:5173`. Stop running JARs before rebuilding them.
+
+Verification:
+
+```bash
+gradle test --rerun-tasks
+```
+
+From `storefront-web`, run
+`npm run typecheck && npm run lint && npm test && npm run build && npm run check:bundle`.
+Run `npm run test:e2e` with the backend and local infrastructure running;
+these tests append demo financial history. Do not run manual checkouts concurrently.
+
+### Runtime notes
+
+- **Colima + Testcontainers**: `build.gradle` auto-detects the local Colima
+  socket only when `DOCKER_HOST` is unset. Other systems use standard
+  Testcontainers discovery. Colima's Ryuk workaround does not apply to
+  standard Docker installations.
+- **Kubernetes is optional**: install kind and kubectl, use the local
+  `kind-fincore` context, install a NetworkPolicy-enforcing CNI, and follow
+  `docs/performance/README.md`. Do not apply this demo to a remote cluster.
+  Compose and kind cannot both own local ports 8080 and 8180.
 - **Account balance provisioning**: `account_balances` rows must be created
   (at zero) when an account is created, not lazily on first posting —
   see ADR-001.

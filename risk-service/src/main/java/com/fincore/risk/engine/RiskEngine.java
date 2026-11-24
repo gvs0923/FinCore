@@ -20,13 +20,15 @@ public class RiskEngine {
 
     private final VelocityCounter velocity;
     private final JdbcTemplate jdbc;
+    private final Pseudonymizer pseudonyms;
 
     public RiskEngine(VelocityCounter velocity,
                   DeviceRegistry devices,
-                  JdbcTemplate jdbc) {
+                  JdbcTemplate jdbc, Pseudonymizer pseudonyms) {
         this.velocity = velocity;
         this.devices = devices;
         this.jdbc = jdbc;
+        this.pseudonyms = pseudonyms;
     }
 
     public RiskResult assess(RiskRequest r) {
@@ -50,7 +52,7 @@ public class RiskEngine {
         }
 
         // Rule 3: IP velocity — looser threshold, shared IPs exist
-        long ipHits = velocity.hit("risk:ip:" + r.ipAddress());
+        long ipHits = velocity.hit("risk:ip:" + pseudonyms.of("ip", r.ipAddress()));
         if (ipHits > 8) {
             score += 30;
             fired.add("ip_velocity");

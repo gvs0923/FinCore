@@ -1,0 +1,14 @@
+.git
+**/build
+**/.gradle
+**/node_modules
+storefront-web/dist
+storefront-web/e2e/.auth
+**/.env
+**/.env.*
+**/*.env
+**/*.pem
+**/*.key
+**/test-results
+**/playwright-report
+**/.lighthouseci

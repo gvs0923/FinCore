@@ -12,13 +12,16 @@ public class DeviceRegistry {
 
     private final StringRedisTemplate redis;
 
-    public DeviceRegistry(StringRedisTemplate redis) {
+    private final Pseudonymizer pseudonyms;
+
+    public DeviceRegistry(StringRedisTemplate redis, Pseudonymizer pseudonyms) {
         this.redis = redis;
+        this.pseudonyms = pseudonyms;
     }
 
     public boolean isFirstSeen(String deviceId) {
         Boolean created = redis.opsForValue().setIfAbsent(
-                "risk:device:known:" + deviceId,
+                "risk:device:known:" + pseudonyms.of("device", deviceId),
                 "1",
                 RETENTION);
 
@@ -41,7 +44,7 @@ public class DeviceRegistry {
         throw new IllegalArgumentException("Unsupported context dimension");
     }
 
-    String key = "risk:device:context:" + deviceId + ":" + dimension;
+    String key = "risk:device:context:" + pseudonyms.of("device", deviceId) + ":" + dimension;
 
     Boolean created = redis.opsForValue()
             .setIfAbsent(key, value, RETENTION);

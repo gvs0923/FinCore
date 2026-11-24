@@ -96,7 +96,7 @@ function SettlementDetail({ batchId }: { batchId: string }) {
       </div>
 
       {/* Pay out — only meaningful on a reconciled batch */}
-      <div className="mt-6 flex gap-3">
+      {canSettle && <div className="mt-6 flex gap-3">
         <button
           onClick={() => payout.mutate()}
           disabled={!canSettle || batch.status !== "RECONCILED" || payout.isPending}
@@ -106,7 +106,7 @@ function SettlementDetail({ batchId }: { batchId: string }) {
                      text-white disabled:cursor-not-allowed disabled:opacity-40">
           {batch.batchKind === "REFUND_ADJUSTMENT" ? "Simulate recovery" : "Pay out"}
         </button>
-      </div>
+      </div>}
       {payout.isError &&
         <p className="mt-2 text-sm text-red-500">{(payout.error as Error).message}</p>}
 

@@ -18,13 +18,17 @@ out/
 .env.*
 *.pem
 *.key
+infra/k8s/secrets.env
 
 ## Logs
 *.log
 
 ## Personal notes, docs & Postman
 AGENTS.md
-docs/
+docs/*
+!docs/performance/
+docs/performance/*
+!docs/performance/README.md
 *.postman_collection.json
 *.postman.json
 
@@ -33,3 +37,4 @@ node_modules/
 dist/
 # Playwright saved login sessions (live cookies)
 storefront-web/e2e/.auth/
+storefront-web/.lighthouseci/

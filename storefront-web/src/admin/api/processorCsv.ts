@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { components } from "../../api/schema";
 
+z.config({ jitless: true });
+
 const rowSchema = z.object({
   processorRef: z.string().min(1).max(255),
   currency: z.literal("USD"),

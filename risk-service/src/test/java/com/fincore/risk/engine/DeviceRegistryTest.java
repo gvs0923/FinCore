@@ -28,13 +28,13 @@ class DeviceRegistryTest {
     @BeforeEach
     void setUp() {
         when(redis.opsForValue()).thenReturn(values);
-        devices = new DeviceRegistry(redis);
+        devices = new DeviceRegistry(redis, new Pseudonymizer("test-key"));
     }
 
     @Test
     void recognizesFirstAndSubsequentVisits() {
         when(values.setIfAbsent(
-                "risk:device:known:device-1",
+                "risk:device:known:" + new Pseudonymizer("test-key").of("device", "device-1"),
                 "1",
                 Duration.ofDays(30)))
                 .thenReturn(true, false);
@@ -44,9 +44,19 @@ class DeviceRegistryTest {
     }
 
     @Test
+    void contextUsesPseudonymisedDeviceKeyAndRetainsBaseline() {
+        String key = "risk:device:context:" + new Pseudonymizer("test-key").of("device", "device-1") + ":country";
+        when(values.setIfAbsent(key, "CA", Duration.ofDays(30))).thenReturn(true, false);
+        when(values.get(key)).thenReturn("US");
+
+        assertThat(devices.contextChanged("device-1", "country", "CA")).isFalse();
+        assertThat(devices.contextChanged("device-1", "country", "CA")).isTrue();
+    }
+
+    @Test
     void doesNotTreatMissingRedisResultAsKnownDevice() {
         when(values.setIfAbsent(
-                "risk:device:known:device-1",
+                "risk:device:known:" + new Pseudonymizer("test-key").of("device", "device-1"),
                 "1",
                 Duration.ofDays(30)))
                 .thenReturn(null);

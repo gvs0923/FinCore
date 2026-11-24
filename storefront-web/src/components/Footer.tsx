@@ -1,7 +1,7 @@
 export default function Footer() {
   return (
     <footer className="mt-auto border-t border-slate-200/60 bg-white dark:border-slate-800 dark:bg-slate-950">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6 text-xs text-slate-400 dark:text-slate-500">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-6 text-xs text-slate-600 dark:text-slate-400">
         <div className="flex items-center gap-4">
           <span className="font-medium text-slate-500 dark:text-slate-400">
             FinCore

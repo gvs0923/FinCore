@@ -27,7 +27,7 @@ describe("CataloguePage", () => {
   it("renders the product grid with names and prices", () => {
     renderPage();
 
-    expect(screen.getByText("Enterprise Processing")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "Enterprise Processing" })).toBeInTheDocument();
     expect(screen.getByText("$499.00")).toBeInTheDocument();
     expect(
       screen.getAllByRole("button", { name: "Add to cart" }).length,
