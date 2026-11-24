@@ -1,5 +1,6 @@
 package com.fincore.settlement.api;
 
+import com.fincore.settlement.audit.Actor;
 import com.fincore.settlement.reconciliation.ReconciliationModels.ImportReportRequest;
 import com.fincore.settlement.reconciliation.ReconciliationModels.RunResponse;
 import com.fincore.settlement.service.ReconciliationService;
@@ -25,10 +26,11 @@ public class ReconciliationController {
     @PostMapping("/{batchId}/reconciliation")
     public RunResponse importReport(
             @PathVariable("batchId") UUID batchId,
-            @RequestBody ImportReportRequest request) {
+            @RequestBody ImportReportRequest request, Actor actor) {
         return reconciliationService.importReport(
                 batchId,
                 request.reportRef(),
-                request.rows());
+                request.rows(),
+                actor);
     }
 }

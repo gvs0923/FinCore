@@ -1,5 +1,7 @@
 package com.fincore.settlement.service;
 
+import com.fincore.settlement.audit.Actor;
+import com.fincore.settlement.audit.AuditLog;
 import com.fincore.settlement.reconciliation.ReconciliationEngine;
 import com.fincore.settlement.reconciliation.ReconciliationModels;
 import com.fincore.settlement.reconciliation.ReconciliationModels.Classification;
@@ -20,19 +22,23 @@ public class ReconciliationService {
 
     private final JdbcTemplate jdbc;
     private final ReconciliationEngine engine;
+    private final AuditLog audit;
 
     public ReconciliationService(
             JdbcTemplate jdbc,
-            ReconciliationEngine engine) {
+            ReconciliationEngine engine,
+            AuditLog audit) {
         this.jdbc = jdbc;
         this.engine = engine;
+        this.audit = audit;
     }
 
     @Transactional
     public RunResponse importReport(
             UUID batchId,
             String reportRef,
-            List<SettlementRow> externalRows) {
+            List<SettlementRow> externalRows,
+            Actor actor) {
         if (reportRef == null || reportRef.isBlank() || reportRef.length() > 255
                 || externalRows == null || externalRows.size() > 10_000
                 || externalRows.stream().anyMatch(r -> r == null || r.processorRef() == null
@@ -170,6 +176,10 @@ public class ReconciliationService {
                     """,
                     batchId);
         }
+
+        audit.record(actor, "RECONCILIATION_IMPORT", "settlement_batch", batchId,
+                java.util.Map.of("reportRef", reportRef, "rows", externalRows.size(),
+                        "breakDetected", breakDetected));
 
         return new RunResponse(runId, batchId, reportRef,
                 comparisons.size(), matched, mismatched,

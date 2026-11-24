@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import com.fincore.settlement.audit.Actor;
 
 @Testcontainers
 @SpringBootTest(properties = {
@@ -123,13 +124,13 @@ class RefundIT {
                 "capture-" + paymentId, 10_000, "USD",
                 Instant.parse("2026-01-10T10:00:00Z")));
 
-        var batch = batches.createOrRefresh(merchant, "USD", day);
+        var batch = batches.createOrRefresh(merchant, "USD", day, Actor.system("test"));
         assertEquals(0, batch.refundsMinor());
         assertEquals(9_680, batch.netMinor()); // 10000 - 320 fee
 
         refunds.refund(paymentId, "key-" + paymentId, "reason", "admin");
 
-        var refreshed = batches.createOrRefresh(merchant, "USD", day);
+        var refreshed = batches.createOrRefresh(merchant, "USD", day, Actor.system("test"));
         assertEquals(10_000, refreshed.refundsMinor());
         assertEquals(-320, refreshed.netMinor()); // merchant owes us the fee
     }
@@ -174,7 +175,7 @@ class RefundIT {
         UUID paymentId = UUID.randomUUID();
         ingestion.ingest(new CapturedPayment(paymentId, merchant, "order-" + paymentId,
                 "capture-" + paymentId, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
-        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
+        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10), Actor.system("test"));
         refunds.refund(paymentId, "open-" + paymentId, "reason", "admin");
         assertEquals(10_000, batches.get(batch.id()).refundsMinor());
         assertEquals(-320, batches.get(batch.id()).netMinor());
@@ -187,7 +188,7 @@ class RefundIT {
         UUID paymentId = UUID.randomUUID();
         ingestion.ingest(new CapturedPayment(paymentId, merchant, "order-" + paymentId,
                 "capture-" + paymentId, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
-        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
+        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10), Actor.system("test"));
         jdbc.update("UPDATE settlement_batches SET status = ? WHERE id = ?", status, batch.id());
         var original = batches.get(batch.id());
         var refund = refunds.refund(paymentId, "frozen-" + paymentId, "reason", "admin");
@@ -213,19 +214,19 @@ class RefundIT {
         assertEquals(1, items.size());
         assertEquals("refund:" + refund.id(), items.getFirst().processorRef());
         assertEquals(-10_000, items.getFirst().amountMinor());
-        assertThrows(ResponseStatusException.class, () -> batches.payout(adjustmentId));
+        assertThrows(ResponseStatusException.class, () -> batches.payout(adjustmentId, Actor.system("test")));
         var mismatch = reconciliation.importReport(adjustmentId, "mismatch", java.util.List.of(
                 new com.fincore.settlement.reconciliation.ReconciliationModels.SettlementRow(
-                        "refund:" + refund.id(), "USD", -9_999, 0)));
+                        "refund:" + refund.id(), "USD", -9_999, 0)), Actor.system("test"));
         assertTrue(mismatch.breakDetected());
         assertEquals(1, mismatch.mismatchedCount());
         assertEquals("OPEN", batches.get(adjustmentId).status());
         var clean = reconciliation.importReport(adjustmentId, "clean", java.util.List.of(
                 new com.fincore.settlement.reconciliation.ReconciliationModels.SettlementRow(
-                        "refund:" + refund.id(), "USD", -10_000, 0)));
+                        "refund:" + refund.id(), "USD", -10_000, 0)), Actor.system("test"));
         assertFalse(clean.breakDetected());
-        assertEquals("RECOVERED", batches.payout(adjustmentId).status());
-        assertThrows(ResponseStatusException.class, () -> batches.payout(adjustmentId));
+        assertEquals("RECOVERED", batches.payout(adjustmentId, Actor.system("test")).status());
+        assertThrows(ResponseStatusException.class, () -> batches.payout(adjustmentId, Actor.system("test")));
         assertEquals(1L, jdbc.queryForObject("SELECT COUNT(*) FROM settlement_outbox_events WHERE aggregate_id = ?",
                 Long.class, adjustmentId));
         assertEquals(original, batches.get(batch.id()));
@@ -240,7 +241,7 @@ class RefundIT {
         UUID paymentId = UUID.randomUUID();
         ingestion.ingest(new CapturedPayment(paymentId, merchant, "order-" + paymentId,
                 "capture-" + paymentId, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
-        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
+        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10), Actor.system("test"));
         jdbc.update("UPDATE settlement_batches SET status = 'PAID_OUT' WHERE id = ?", batch.id());
         var original = batches.get(batch.id());
         String key = "late-" + paymentId;
@@ -283,14 +284,14 @@ class RefundIT {
             ingestion.ingest(new CapturedPayment(id, merchant, "order-" + id,
                     "capture-" + id, 10_000, "USD", Instant.parse("2026-01-10T10:00:00Z")));
         }
-        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10));
+        var batch = batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10), Actor.system("test"));
         jdbc.update("UPDATE settlement_batches SET status = 'RECONCILED' WHERE id = ?", batch.id());
         for (UUID id : ids) refunds.refund(id, "late-" + id, "reason", "admin");
         var adjustments = batches.adjustments(batch.id(), 50, 0);
         assertEquals(2, adjustments.size());
         assertEquals(adjustments.getFirst().settlementDate(), adjustments.getLast().settlementDate());
         assertNotEquals(adjustments.getFirst().id(), adjustments.getLast().id());
-        assertEquals(batch.id(), batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10)).id());
+        assertEquals(batch.id(), batches.createOrRefresh(merchant, "USD", LocalDate.of(2026, 1, 10), Actor.system("test")).id());
         assertEquals(0, batches.get(batch.id()).refundsMinor());
         assertEquals(1, batches.adjustments(batch.id(), 1, 1).size());
     }

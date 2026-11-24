@@ -23,6 +23,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.fincore.settlement.audit.Actor;
 
 @Testcontainers
 @SpringBootTest(properties = {
@@ -148,7 +149,7 @@ class SettlementJobsIT {
         Files.writeString(inbox.resolve(reportName(merchant)),
                 "processorRef,currency,amountMinor,feeMinor\n" + ref + ",USD,10000,320\n");
         UUID batchId = jobs.importInbox(inbox).getFirst().batchId();
-        batches.payout(batchId);
+        batches.payout(batchId, Actor.system("test"));
 
         var after = summary.summary(from, Instant.now().plusSeconds(60));
 

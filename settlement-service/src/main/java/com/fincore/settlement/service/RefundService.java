@@ -1,6 +1,7 @@
 package com.fincore.settlement.service;
 
 import com.fincore.settlement.api.BatchModels.RefundResponse;
+import com.fincore.settlement.outbox.OutboxTrace;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -13,9 +14,11 @@ import java.util.UUID;
 public class RefundService {
 
     private final JdbcTemplate jdbc;
+    private final OutboxTrace outboxTrace;
 
-    public RefundService(JdbcTemplate jdbc) {
+    public RefundService(JdbcTemplate jdbc, OutboxTrace outboxTrace) {
         this.jdbc = jdbc;
+        this.outboxTrace = outboxTrace;
     }
 
     @Transactional
@@ -115,10 +118,10 @@ public class RefundService {
 
         jdbc.update("""
                 INSERT INTO settlement_outbox_events
-                    (id, aggregate_id, event_type, payload)
-                VALUES (?, ?, 'payment.refunded', ?::jsonb)
+                    (id, aggregate_id, event_type, payload, traceparent)
+                VALUES (?, ?, 'payment.refunded', ?::jsonb, ?)
                 """,
-                UUID.randomUUID(), paymentId, payload);
+                UUID.randomUUID(), paymentId, payload, outboxTrace.currentTraceparent());
 
         jdbc.update("""
                 INSERT INTO refund_audit_events (id, refund_id, payment_id, actor, action, reason)

@@ -2,7 +2,10 @@ package com.fincore.settlement.service;
 
 import com.fincore.settlement.api.BatchModels.BatchItemResponse;
 import com.fincore.settlement.api.BatchModels.BatchResponse;
+import com.fincore.settlement.audit.Actor;
+import com.fincore.settlement.audit.AuditLog;
 import com.fincore.settlement.domain.FeePolicy;
+import com.fincore.settlement.outbox.OutboxTrace;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -21,17 +24,25 @@ public class SettlementBatchService {
 
     private final JdbcTemplate jdbc;
     private final tools.jackson.databind.ObjectMapper objectMapper;
+    private final OutboxTrace outboxTrace;
+    private final AuditLog audit;
 
-    public SettlementBatchService(JdbcTemplate jdbc, tools.jackson.databind.ObjectMapper objectMapper) {
+    public SettlementBatchService(JdbcTemplate jdbc,
+                                  tools.jackson.databind.ObjectMapper objectMapper,
+                                  OutboxTrace outboxTrace,
+                                  AuditLog audit) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
+        this.outboxTrace = outboxTrace;
+        this.audit = audit;
     }
 
     @Transactional
     public BatchResponse createOrRefresh(
             String merchantId,
             String currency,
-            LocalDate settlementDate) {
+            LocalDate settlementDate,
+            Actor actor) {
         validateScope(merchantId, currency, settlementDate);
         SettlementLocks.merchant(jdbc, merchantId);
 
@@ -181,6 +192,10 @@ public class SettlementBatchService {
                 batch.id(),
                 batch.id());
 
+        audit.record(actor, "BATCH_CREATE_OR_REFRESH", "settlement_batch", batch.id(),
+                java.util.Map.of("merchantId", merchantId,
+                        "settlementDate", settlementDate.toString()));
+
         return get(batch.id());
     }
 
@@ -261,7 +276,7 @@ public class SettlementBatchService {
     }
 
     @Transactional
-    public BatchResponse payout(UUID batchId) {
+    public BatchResponse payout(UUID batchId, Actor actor) {
         SettlementLocks.batch(jdbc, batchId);
         List<Object[]> rows = jdbc.query("""
                 SELECT status, merchant_id, currency,
@@ -312,9 +327,9 @@ public class SettlementBatchService {
 
         jdbc.update("""
                 INSERT INTO settlement_outbox_events
-                    (id, aggregate_id, event_type, payload)
-                VALUES (?, ?, 'settlement.payout', ?::jsonb)
-                """, UUID.randomUUID(), batchId, payload);
+                    (id, aggregate_id, event_type, payload, traceparent)
+                VALUES (?, ?, 'settlement.payout', ?::jsonb, ?)
+                """, UUID.randomUUID(), batchId, payload, outboxTrace.currentTraceparent());
 
         jdbc.update("""
                 UPDATE settlement_batches
@@ -323,6 +338,9 @@ public class SettlementBatchService {
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """, adjustment ? "RECOVERED" : "PAID_OUT", batchId);
+
+        audit.record(actor, "BATCH_PAYOUT", "settlement_batch", batchId,
+                java.util.Map.of("netMinor", net, "currency", b[2]));
 
         return get(batchId);
     }

@@ -43,7 +43,32 @@ services:
     depends_on:
       - kafka
 
-  
+  jaeger:
+    image: jaegertracing/jaeger:2.5.0
+    ports:
+      - "127.0.0.1:16686:16686"   # UI
+      - "127.0.0.1:4318:4318"     # OTLP/HTTP
+
+  prometheus:
+    image: prom/prometheus:v3.2.1
+    ports:
+      - "127.0.0.1:9099:9090"     # 9090 is ledger-service on the host
+    volumes:
+      - ./infra/prometheus:/etc/prometheus:ro
+    # Services run on the host (gradle bootRun), not in containers.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.1   # pin a verified tag
     command: ["start-dev", "--import-realm"]

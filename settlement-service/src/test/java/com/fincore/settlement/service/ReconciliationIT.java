@@ -24,6 +24,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import com.fincore.settlement.audit.Actor;
 
 @Testcontainers
 @SpringBootTest(properties = {
@@ -76,7 +77,7 @@ class ReconciliationIT {
 
         RunResponse run = reconciliation.importReport(
                 batch.id(), "report-1",
-                List.of(row(ref, 10_000, 320)));
+                List.of(row(ref, 10_000, 320)), Actor.system("test"));
 
         assertEquals(1, run.matchedCount());
         assertEquals(0, run.mismatchedCount());
@@ -93,7 +94,7 @@ class ReconciliationIT {
 
         RunResponse run = reconciliation.importReport(
                 batch.id(), "report-1",
-                List.of(row(ref, 10_000, 321))); // 1-cent fee break
+                List.of(row(ref, 10_000, 321)), Actor.system("test")); // 1-cent fee break
 
         assertEquals(1, run.mismatchedCount());
         assertTrue(run.breakDetected());
@@ -111,7 +112,7 @@ class ReconciliationIT {
                 batch.id(), "report-1",
                 List.of(
                         row(ref, 10_000, 320),
-                        row("ghost-capture", 7_000, 233)));
+                        row("ghost-capture", 7_000, 233)), Actor.system("test"));
 
         assertEquals(1, run.matchedCount());
         assertEquals(1, run.missingInternalCount());
@@ -125,18 +126,18 @@ class ReconciliationIT {
         BatchResponse batch = createBatch(merchant);
 
         reconciliation.importReport(batch.id(), "report-1",
-                List.of(row(ref, 10_000, 320)));
+                List.of(row(ref, 10_000, 320)), Actor.system("test"));
 
         // Second import → 409
         assertThrows(ResponseStatusException.class,
                 () -> reconciliation.importReport(
                         batch.id(), "report-1-dup",
-                        List.of(row(ref, 10_000, 320))));
+                        List.of(row(ref, 10_000, 320)), Actor.system("test")));
 
         // Late capture cannot join the frozen batch
         capture(merchant, 5_000);
         BatchResponse after = batches.createOrRefresh(
-                merchant, "USD", DAY);
+                merchant, "USD", DAY, Actor.system("test"));
         assertEquals("RECONCILED", after.status());
         assertEquals(1, after.captureCount());
     }
@@ -151,13 +152,13 @@ class ReconciliationIT {
                 () -> reconciliation.importReport(
                         batch.id(), "report-eur",
                         List.of(new SettlementRow(
-                                "any", "EUR", 1_000, 30))));
+                                "any", "EUR", 1_000, 30)), Actor.system("test")));
     }
 
     // --- helpers ---
 
     private BatchResponse createBatch(String merchant) {
-        return batches.createOrRefresh(merchant, "USD", DAY);
+        return batches.createOrRefresh(merchant, "USD", DAY, Actor.system("test"));
     }
 
     private String capture(String merchant, long amount) {

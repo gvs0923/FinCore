@@ -1,0 +1,30 @@
+groups:
+  - name: fincore
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: page }
+        annotations: { summary: "{{ $labels.instance }} is not being scraped" }
+
+      - alert: HighServerErrorRate
+        expr: |
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            / sum by (application) (rate(http_server_requests_seconds_count[5m])) > 0.05
+        for: 5m
+        labels: { severity: page }
+        annotations: { summary: "{{ $labels.application }} 5xx rate above 5%" }
+
+      - alert: CheckoutP99Slow
+        expr: |
+          histogram_quantile(0.99, sum by (le) (rate(
+            http_server_requests_seconds_bucket{application="checkout-bff",uri=~"/v1/checkout/.*"}[5m]))) > 1
+        for: 10m
+        labels: { severity: ticket }
+        annotations: { summary: "Checkout p99 above 1s" }
+
+      - alert: OutboxStuck
+        expr: max by (application) (fincore_outbox_oldest_age_seconds) > 60
+        for: 5m
+        labels: { severity: page }
+        annotations: { summary: "{{ $labels.application }} outbox has not drained for 60s+" }

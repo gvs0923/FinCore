@@ -20,18 +20,21 @@ public class LedgerOutboxPublisher {
 
     private final JdbcTemplate jdbc;
     private final KafkaTemplate<String, String> kafka;
+    private final OutboxTrace outboxTrace;
 
     public LedgerOutboxPublisher(JdbcTemplate jdbc,
-                                  KafkaTemplate<String, String> kafka) {
+                                  KafkaTemplate<String, String> kafka,
+                                  OutboxTrace outboxTrace) {
         this.jdbc = jdbc;
         this.kafka = kafka;
+        this.outboxTrace = outboxTrace;
     }
 
     @Scheduled(fixedDelay = 1000)
     @Transactional
     public void publishPending() {
         List<Map<String, Object>> rows = jdbc.queryForList("""
-                SELECT id, event_type, aggregate_id, payload::text
+                SELECT id, event_type, aggregate_id, payload::text, traceparent
                 FROM ledger_outbox_events
                 WHERE published_at IS NULL
                 ORDER BY created_at
@@ -42,7 +45,15 @@ public class LedgerOutboxPublisher {
             String topic = (String) row.get("event_type");
             String key = (String) row.get("aggregate_id");
             String payload = (String) row.get("payload");
-            kafka.send(topic, key, payload);
+            try {
+                outboxTrace.inTrace((String) row.get("traceparent"),
+                        "outbox publish " + topic,
+                        () -> kafka.send(topic, key, payload).get());
+            } catch (Exception e) {
+                log.error("Ledger outbox publish failed for {}, will retry",
+                        row.get("id"), e);
+                break;
+            }
 
             jdbc.update(
                     "UPDATE ledger_outbox_events SET published_at = ? WHERE id = ?",

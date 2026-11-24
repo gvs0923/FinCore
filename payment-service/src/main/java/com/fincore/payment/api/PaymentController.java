@@ -1,5 +1,6 @@
 package com.fincore.payment.api;
 
+import com.fincore.payment.audit.Actor;
 import com.fincore.payment.domain.Payment;
 import com.fincore.payment.service.PaymentService;
 import jakarta.validation.Valid;
@@ -62,7 +63,7 @@ public class PaymentController {
      */
     @PostMapping("/{paymentId}/resolve")
     public PaymentResponse resolve(@PathVariable UUID paymentId,
-                                   @RequestParam String action) {
+                                   @RequestParam String action, Actor actor) {
         // No default and no "anything but reject" — a typo must never capture money.
         boolean approve = switch (action) {
             case "approve" -> true;
@@ -71,7 +72,7 @@ public class PaymentController {
                     "action must be 'approve' or 'reject'");
         };
         return PaymentResponse.from(
-                paymentService.resolveReviewedPayment(paymentId, approve));
+                paymentService.resolveReviewedPayment(paymentId, approve, actor));
     }
 
 

@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+rule_files:
+  - /etc/prometheus/alerts.yml
+scrape_configs:
+  # Services run on the host; each exposes /actuator/prometheus on its
+  # management port (app port + 10000).
+  - job_name: fincore
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - host.docker.internal:18089   # checkout-bff
+          - host.docker.internal:19090   # ledger-service
+          - host.docker.internal:19091   # payment-service
+          - host.docker.internal:19095   # metrics-projection
+          - host.docker.internal:19096   # risk-service
+          - host.docker.internal:19097   # settlement-service
+          - host.docker.internal:19098   # notification-service

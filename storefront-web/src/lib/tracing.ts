@@ -7,6 +7,10 @@ function hex(bytes: number): string {
   return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export function traceHeaders(): Record<string, string> {
+export function traceHeaders(): { traceparent: string } {
   return { traceparent: `00-${hex(16)}-${hex(8)}-01` };
+}
+
+export function traceIdOf(headers: { traceparent: string }): string {
+  return headers.traceparent.split("-")[1];
 }
