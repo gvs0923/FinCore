@@ -54,4 +54,9 @@ public class RiskAdminClient {
                 .retrieve()
                 .toBodilessEntity();
     }
+
+    public com.fincore.checkout.api.admin.AiViews.RiskDecisionRow decision(java.util.UUID paymentId) {
+        return restClient.get().uri("/v1/risk/decisions/{id}", paymentId)
+                .retrieve().body(com.fincore.checkout.api.admin.AiViews.RiskDecisionRow.class);
+    }
 }

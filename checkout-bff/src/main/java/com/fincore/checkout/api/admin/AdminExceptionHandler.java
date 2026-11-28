@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 
-@RestControllerAdvice(assignableTypes = AdminController.class)
+@RestControllerAdvice(assignableTypes = {AdminController.class, AiAdminController.class})
 public class AdminExceptionHandler {
     @ExceptionHandler(HttpClientErrorException.class)
     public ProblemDetail clientError(HttpClientErrorException error) {

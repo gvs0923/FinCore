@@ -72,6 +72,22 @@ public class RiskController {
         return Map.of("paymentId", paymentId, "resolved", updated > 0);
     }
 
+    @GetMapping("/decisions/{paymentId}")
+    public Map<String, Object> latestDecision(@PathVariable UUID paymentId) {
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT payment_id, decision, score, fired_rules, signals::text AS signals,
+                       ml_probability, ml_model_version, resolution, created_at
+                FROM risk_decisions
+                WHERE payment_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """, paymentId.toString());
+        if (rows.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No risk decision for payment");
+        }
+        return rows.get(0);
+    }
+
     @PostMapping("/review-details")
     public List<Map<String, Object>> reviewDetails(
         @RequestBody List<String> paymentIds) {

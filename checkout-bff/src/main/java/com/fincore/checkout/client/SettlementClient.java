@@ -64,6 +64,11 @@ public class SettlementClient {
                 .retrieve().body(new ParameterizedTypeReference<>() {});
     }
 
+    public com.fincore.checkout.api.admin.AiViews.ReconAggregates anomalyAggregates(UUID runId) {
+        return restClient.get().uri("/internal/settlement/reconciliation-runs/{id}/anomaly-aggregates", runId)
+                .retrieve().body(com.fincore.checkout.api.admin.AiViews.ReconAggregates.class);
+    }
+
     // Window is fixed (last 24h) by the overview, so one short-TTL entry is
     // enough to stop every dashboard poll from querying settlement-service.
     private static final long SUMMARY_TTL_MS = 15_000;

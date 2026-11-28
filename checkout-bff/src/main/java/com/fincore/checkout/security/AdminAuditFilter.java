@@ -77,6 +77,7 @@ class AdminAuditFilter extends OncePerRequestFilter {
         if (path.equals("/v1/admin/settlement/batches")) return "SETTLEMENT_BATCH";
         if (path.matches("/v1/admin/settlement/batches/[0-9a-fA-F-]{36}/payout")) return "SETTLEMENT_PAYOUT";
         if (path.matches("/v1/admin/settlement/batches/[0-9a-fA-F-]{36}/reconciliation")) return "RECONCILIATION";
+        if (path.equals("/v1/admin/ai/copilot")) return "AI_COPILOT_QUERY";
         return "ADMIN_REQUEST";
     }
 }

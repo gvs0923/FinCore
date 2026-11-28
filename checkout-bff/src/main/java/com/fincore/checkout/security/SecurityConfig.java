@@ -46,6 +46,8 @@ public class SecurityConfig {
                         "/v1/admin/settlement/batches/*/payout",
                         "/v1/admin/settlement/batches/*/reconciliation",
                         "/v1/admin/settlement/refunds").hasRole(FINANCE_OPS)
+                // Read-only despite POST (body keeps the question out of URLs); still an explicit role decision.
+                .requestMatchers(HttpMethod.POST, "/v1/admin/ai/copilot").hasRole(VIEWER)
                 .requestMatchers(HttpMethod.GET, "/v1/admin/**").hasRole(VIEWER)
                 // Fail closed: a new admin POST/PUT/DELETE is denied until someone
                 // decides which role owns it.

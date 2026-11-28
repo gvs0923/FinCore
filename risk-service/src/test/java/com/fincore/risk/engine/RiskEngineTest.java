@@ -7,11 +7,17 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.math.BigDecimal;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -166,6 +172,55 @@ class RiskEngineTest {
         assertThat(result.score()).isEqualTo(15);
         assertThat(result.firedRules())
                 .containsExactly("timezone_changed", "language_changed");
+    }
+
+    @Test
+    void mlEscalatesOnlyAtThresholdAndPersistsDerivedSignals() {
+        MlScorer ml = mock(MlScorer.class);
+        engine = new RiskEngine(velocity, devices, jdbc, new Pseudonymizer("test-key"), ml);
+        when(ml.score(anyMap()))
+                .thenReturn(Optional.of(new MlScorer.MlScore(0.85, "test-v1")));
+
+        RiskResult result = engine.assess(request(10_000));
+
+        assertThat(result.decision()).isEqualTo("REVIEW");
+        assertThat(result.score()).isZero();
+        assertThat(result.firedRules()).containsExactly("ml_high_risk");
+        assertThat(result.signals()).containsEntry("mlAvailable", true)
+                .containsEntry("mlProbability", 0.85).containsEntry("mlModelVersion", "test-v1");
+        verify(ml).score(Map.of(
+                "amountMinor", 10_000L, "cardHits", 1L, "ipHits", 1L, "newDevice", false,
+                "countryChanged", false, "timezoneChanged", false, "languageChanged", false));
+        verify(jdbc).update(anyString(), eq("payment-1"),
+                eq("REVIEW"), eq(0),
+                eq("ml_high_risk"), anyString(),
+                eq(new BigDecimal("0.8500")),
+                eq("test-v1"));
+    }
+
+    @Test
+    void mlBelowThresholdDoesNotEscalateOrRelaxRuleDecisions() {
+        MlScorer ml = mock(MlScorer.class);
+        engine = new RiskEngine(velocity, devices, jdbc, new Pseudonymizer("test-key"), ml);
+        when(ml.score(anyMap()))
+                .thenReturn(Optional.of(new MlScorer.MlScore(0.8499, "test-v1")));
+
+        assertThat(engine.assess(request(10_000)).decision()).isEqualTo("ALLOW");
+        assertThat(engine.assess(request(1_000_001)).decision()).isEqualTo("REVIEW");
+        when(velocity.hit("risk:card:card-1")).thenReturn(6L);
+        assertThat(engine.assess(request(1_000_001)).decision()).isEqualTo("BLOCK");
+    }
+
+    @Test
+    void missingMlScoreUsesRulesAndPersistsNullModelFields() {
+        RiskResult result = engine.assess(request(10_000));
+
+        assertThat(result.decision()).isEqualTo("ALLOW");
+        assertThat(result.signals()).containsEntry("mlAvailable", false)
+                .doesNotContainKeys("mlProbability", "mlModelVersion");
+        verify(jdbc).update(anyString(), eq("payment-1"),
+                eq("ALLOW"), eq(0),
+                eq(""), anyString(), isNull(), isNull());
     }
 
     private RiskRequest request(long amount) {

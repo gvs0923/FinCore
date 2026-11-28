@@ -1,11 +1,16 @@
 package com.fincore.risk.engine;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import tools.jackson.databind.ObjectMapper;
 
@@ -15,20 +20,29 @@ public class RiskEngine {
     private static final long HIGH_AMOUNT_MINOR = 1_000_000;  // $10k
     private static final int REVIEW_AT = 30;
     private static final int BLOCK_AT = 60;
+    private static final double ML_REVIEW_AT = 0.85;
     private final DeviceRegistry devices;
     private final ObjectMapper json = new ObjectMapper();
 
     private final VelocityCounter velocity;
     private final JdbcTemplate jdbc;
     private final Pseudonymizer pseudonyms;
+    private final MlScorer mlScorer;
 
+    @Autowired
     public RiskEngine(VelocityCounter velocity,
-                  DeviceRegistry devices,
-                  JdbcTemplate jdbc, Pseudonymizer pseudonyms) {
+                      DeviceRegistry devices,
+                      JdbcTemplate jdbc, Pseudonymizer pseudonyms, MlScorer mlScorer) {
         this.velocity = velocity;
         this.devices = devices;
         this.jdbc = jdbc;
         this.pseudonyms = pseudonyms;
+        this.mlScorer = mlScorer;
+    }
+
+    public RiskEngine(VelocityCounter velocity, DeviceRegistry devices,
+                      JdbcTemplate jdbc, Pseudonymizer pseudonyms) {
+        this(velocity, devices, jdbc, pseudonyms, MlScorer.disabled());
     }
 
     public RiskResult assess(RiskRequest r) {
@@ -90,25 +104,45 @@ public class RiskEngine {
         String decision = score >= BLOCK_AT ? "BLOCK"
                         : score >= REVIEW_AT ? "REVIEW" : "ALLOW";
 
-        Map<String, Object> signals = Map.of(
-        "cardHits", cardHits,
-        "ipHits", ipHits,
-        "newDevice", newDevice,
-        "highAmount", r.amount() > HIGH_AMOUNT_MINOR,
-        "countryChanged", countryChanged,
-        "timezoneChanged", timezoneChanged,
-        "languageChanged", languageChanged);
+        Optional<MlScorer.MlScore> ml = mlScorer.score(Map.of(
+                "amountMinor", r.amount(),
+                "cardHits", cardHits,
+                "ipHits", ipHits,
+                "newDevice", newDevice,
+                "countryChanged", countryChanged,
+                "timezoneChanged", timezoneChanged,
+                "languageChanged", languageChanged));
+        if ("ALLOW".equals(decision) && ml.isPresent() && ml.get().probability() >= ML_REVIEW_AT) {
+            decision = "REVIEW";
+            fired.add("ml_high_risk");
+        }
+
+        Map<String, Object> signals = new LinkedHashMap<>();
+        signals.put("cardHits", cardHits);
+        signals.put("ipHits", ipHits);
+        signals.put("newDevice", newDevice);
+        signals.put("highAmount", r.amount() > HIGH_AMOUNT_MINOR);
+        signals.put("countryChanged", countryChanged);
+        signals.put("timezoneChanged", timezoneChanged);
+        signals.put("languageChanged", languageChanged);
+        signals.put("mlAvailable", ml.isPresent());
+        ml.ifPresent(s -> {
+            signals.put("mlProbability", s.probability());
+            signals.put("mlModelVersion", s.modelVersion());
+        });
 
         jdbc.update("""
         INSERT INTO risk_decisions
-            (payment_id, decision, score, fired_rules, signals)
-        VALUES (?, ?, ?, ?, CAST(? AS jsonb))
+            (payment_id, decision, score, fired_rules, signals, ml_probability, ml_model_version)
+        VALUES (?, ?, ?, ?, CAST(? AS jsonb), ?, ?)
         """,
         r.paymentId(),
         decision,
         score,
         String.join(",", fired),
-        json.writeValueAsString(signals));
+        json.writeValueAsString(signals),
+        ml.map(s -> BigDecimal.valueOf(s.probability()).setScale(4, RoundingMode.HALF_UP)).orElse(null),
+        ml.map(MlScorer.MlScore::modelVersion).orElse(null));
 
         return new RiskResult(decision, score, fired, signals);
     }

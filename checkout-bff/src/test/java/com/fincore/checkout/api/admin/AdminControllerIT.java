@@ -127,7 +127,9 @@ class AdminControllerIT {
             "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/items",
             "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/adjustments",
             "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/reconciliation-runs",
-            "/v1/admin/settlement/reconciliation-runs/00000000-0000-0000-0000-000000000001/items"
+            "/v1/admin/settlement/reconciliation-runs/00000000-0000-0000-0000-000000000001/items",
+            "/v1/admin/orders/00000000-0000-0000-0000-000000000001/risk-explanation",
+            "/v1/admin/settlement/reconciliation-runs/00000000-0000-0000-0000-000000000001/anomaly-summary"
     })
     void everyGetRoute_withoutToken_returns401(String uri) throws Exception {
         mockMvc.perform(get(uri))
@@ -139,7 +141,8 @@ class AdminControllerIT {
             "/v1/admin/settlement/batches",
             "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/payout",
             "/v1/admin/settlement/batches/00000000-0000-0000-0000-000000000001/reconciliation",
-            "/v1/admin/settlement/refunds"
+            "/v1/admin/settlement/refunds",
+            "/v1/admin/ai/copilot"
     })
     void mutationsRequireAuthentication(String uri) throws Exception {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(uri)
