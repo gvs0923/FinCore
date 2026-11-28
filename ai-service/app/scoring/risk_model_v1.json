@@ -1,0 +1,11 @@
+{
+  "version": "risk-lr-v1-seed",
+  "features": ["log_amount", "card_hits", "ip_hits", "new_device", "country_changed", "timezone_changed", "language_changed"],
+  "bias": -3.2,
+  "weights": [0.55, 0.9, 0.6, 0.45, 0.7, 0.35, 0.2],
+  "means": [8.6, 1.3, 1.6, 0.17, 0.05, 0.07, 0.06],
+  "scales": [1.4, 1.1, 1.4, 0.38, 0.22, 0.26, 0.24],
+  "trainedAt": null,
+  "trainingData": "hand-set seed weights; run `python -m app.scoring.train` to replace with a fitted synthetic model",
+  "holdoutAuc": null
+}
